@@ -1,0 +1,14 @@
+### Create material
+POST http://localhost:4000/api/materials
+Content-Type: application/json
+
+{"name":"Tint Cream","unit":"ml","stockOnHand":100}
+
+### Create procedure
+POST http://localhost:4000/api/procedures
+Content-Type: application/json
+
+{"name":"Brow tint","durationMin":45,"price":650}
+
+### List procedures
+GET http://localhost:4000/api/procedures

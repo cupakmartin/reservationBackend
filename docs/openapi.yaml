@@ -1,0 +1,287 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: GlowFlow – Cosmetics Reservation API
+  version: 0.1.0
+servers:
+  - url: http://localhost:4000
+
+tags:
+  - name: Clients
+  - name: Materials
+  - name: Procedures
+  - name: Bookings
+
+paths:
+  /:
+    get:
+      summary: Health/info
+      tags: [Misc]
+      responses:
+        '200':
+          description: Info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  name: { type: string }
+                  version: { type: string }
+
+  /api/clients:
+    get:
+      summary: List clients
+      tags: [Clients]
+      responses:
+        '200':
+          description: Array of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Client' }
+    post:
+      summary: Create client
+      tags: [Clients]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientCreate' }
+            examples:
+              basic: { value: { name: "Anna", email: "anna@example.com", phone: "+420123456789" } }
+      responses:
+        '201':
+          description: Created client
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+
+  /api/materials:
+    get:
+      summary: List materials
+      tags: [Materials]
+      responses:
+        '200':
+          description: Array of materials
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Material' }
+    post:
+      summary: Create material
+      tags: [Materials]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaterialCreate' }
+            examples:
+              tint: { value: { name: "Tint Cream", unit: "ml", stockOnHand: 100 } }
+      responses:
+        '201':
+          description: Created material
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Material' }
+
+  /api/procedures:
+    get:
+      summary: List procedures
+      tags: [Procedures]
+      responses:
+        '200':
+          description: Array of procedures
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Procedure' }
+    post:
+      summary: Create procedure
+      tags: [Procedures]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProcedureCreate' }
+            examples:
+              browTint: { value: { name: "Brow tint", durationMin: 45, price: 650 } }
+      responses:
+        '201':
+          description: Created procedure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Procedure' }
+
+  /api/procedures/{id}/bom:
+    post:
+      summary: Set procedure BOM (materials consumption)
+      tags: [Procedures]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/BOMItem' }
+            examples:
+              example1:
+                value:
+                  - { materialId: "64f0b5...", qtyPerProcedure: 5 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/bookings:
+    get:
+      summary: List recent bookings
+      tags: [Bookings]
+      responses:
+        '200':
+          description: Array of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Booking' }
+    post:
+      summary: Create booking (sends emails)
+      tags: [Bookings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookingCreate' }
+            examples:
+              basic:
+                value:
+                  clientId: "64f0b5..."
+                  providerName: "Eva"
+                  procedureId: "64f0b6..."
+                  startsAt: "2025-10-10T10:00:00.000Z"
+                  endsAt: "2025-10-10T10:45:00.000Z"
+                  status: "confirmed"
+                  paymentType: "cash"
+      responses:
+        '201':
+          description: Created booking
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+
+  /api/bookings/{id}/status/{newStatus}:
+    patch:
+      summary: Update booking status (fulfill → deduct stock & increment loyalty)
+      tags: [Bookings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: newStatus
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [held, confirmed, fulfilled, cancelled]
+      responses:
+        '200':
+          description: Updated booking
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+
+components:
+  schemas:
+    ClientCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+    Client:
+      allOf:
+        - $ref: '#/components/schemas/ClientCreate'
+        - type: object
+          properties:
+            _id: { type: string }
+            visitsCount: { type: integer, default: 0 }
+            loyaltyTier: { type: string }
+
+    MaterialCreate:
+      type: object
+      required: [name, unit]
+      properties:
+        name: { type: string }
+        unit:
+          type: string
+          enum: [ml, g, pcs]
+        stockOnHand:
+          type: number
+          default: 0
+    Material:
+      allOf:
+        - $ref: '#/components/schemas/MaterialCreate'
+        - type: object
+          properties:
+            _id: { type: string }
+
+    ProcedureCreate:
+      type: object
+      required: [name, durationMin, price]
+      properties:
+        name: { type: string }
+        durationMin: { type: integer, minimum: 1 }
+        price: { type: number, minimum: 0 }
+    BOMItem:
+      type: object
+      required: [materialId, qtyPerProcedure]
+      properties:
+        materialId: { type: string }
+        qtyPerProcedure: { type: number, minimum: 0 }
+    Procedure:
+      allOf:
+        - $ref: '#/components/schemas/ProcedureCreate'
+        - type: object
+          properties:
+            _id: { type: string }
+            bom:
+              type: array
+              items: { $ref: '#/components/schemas/BOMItem' }
+
+    BookingCreate:
+      type: object
+      required: [clientId, providerName, procedureId, startsAt, endsAt, status, paymentType]
+      properties:
+        clientId: { type: string }
+        providerName: { type: string }
+        procedureId: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [held, confirmed, fulfilled, cancelled]
+        paymentType:
+          type: string
+          enum: [cash, card, deposit]
+    Booking:
+      allOf:
+        - $ref: '#/components/schemas/BookingCreate'
+        - type: object
+          properties:
+            _id: { type: string }

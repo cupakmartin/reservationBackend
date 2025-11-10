@@ -1,0 +1,20 @@
+# Node / TypeScript
+node_modules/
+dist/
+.tmp/
+coverage/
+*.log
+npm-debug.log*
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Debug/HTTP requests output
+debug-requests/*.response.json
