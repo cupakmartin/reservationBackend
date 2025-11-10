@@ -8,7 +8,15 @@ import { errorMiddleware } from './middleware/error'
 
 export function createApp() {
     const app = express()
-    app.use(helmet())
+    
+    // Disable helmet entirely for /docs route
+    app.use((req, res, next) => {
+        if (req.path.startsWith('/docs')) {
+            return next()
+        }
+        helmet()(req, res, next)
+    })
+    
     app.use(cors())
     app.use(express.json())
     app.use(morgan('dev'))

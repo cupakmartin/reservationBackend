@@ -21,6 +21,7 @@ describe('General API', () => {
             const res = await request(app).get('/docs/')
             
             expect(res.status).toBe(200)
+            expect(res.text).toContain('swagger-ui')
         })
     })
 
