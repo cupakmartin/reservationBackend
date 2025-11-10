@@ -1,10 +1,23 @@
 import { Client } from '../database/models/client.model'
 
+const LOYALTY_TIERS = [
+    { minVisits: 15, tier: 'Gold' },
+    { minVisits: 8, tier: 'Silver' },
+    { minVisits: 3, tier: 'Bronze' }
+] as const
+
 export async function applyLoyaltyAfterFulfilled(clientId: string) {
-    const c = await Client.findById(clientId); if (!c) return
-    c.visitsCount = (c.visitsCount ?? 0) + 1
-    if (c.visitsCount >= 15) c.loyaltyTier = 'Gold'
-    else if (c.visitsCount >= 8) c.loyaltyTier = 'Silver'
-    else if (c.visitsCount >= 3) c.loyaltyTier = 'Bronze'
-    await c.save()
+    const client = await Client.findById(clientId)
+    if (!client) return
+    
+    client.visitsCount = (client.visitsCount ?? 0) + 1
+    client.loyaltyTier = determineLoyaltyTier(client.visitsCount)
+    await client.save()
+}
+
+function determineLoyaltyTier(visitsCount: number): string | undefined {
+    for (const { minVisits, tier } of LOYALTY_TIERS) {
+        if (visitsCount >= minVisits) return tier
+    }
+    return undefined
 }

@@ -1,12 +1,12 @@
 import { Router } from 'express'
-import { Client } from '../../../database/models/client.model'
+import { validate, createClientSchema, updateClientSchema } from '../../../middleware/validation'
+import { getAllClients, createClient, updateClient, deleteClient } from './clients.controller'
+
 const router = Router()
 
-router.get('/', async (_req, res) => res.json(await Client.find().sort({ name: 1 })))
-router.post('/', async (req, res) => {
-    const { name, email, phone } = req.body
-    const doc = await Client.create({ name, email, phone })
-    res.status(201).json(doc)
-})
+router.get('/', getAllClients)
+router.post('/', validate(createClientSchema), createClient)
+router.put('/:id', validate(updateClientSchema), updateClient)
+router.delete('/:id', deleteClient)
 
 export default router

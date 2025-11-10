@@ -57,6 +57,67 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Client' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+
+  /api/clients/{id}:
+    put:
+      summary: Update client
+      tags: [Clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientUpdate' }
+            examples:
+              update: { value: { name: "Anna Updated", email: "anna.new@example.com" } }
+      responses:
+        '200':
+          description: Updated client
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    delete:
+      summary: Delete client
+      tags: [Clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Client deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
 
   /api/materials:
     get:
@@ -86,6 +147,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Material' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
 
   /api/procedures:
     get:
@@ -115,6 +181,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Procedure' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
 
   /api/procedures/{id}/bom:
     post:
@@ -145,6 +216,16 @@ paths:
                 type: object
                 properties:
                   ok: { type: boolean }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '404':
+          description: Procedure not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
 
   /api/bookings:
     get:
@@ -182,6 +263,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Booking' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
 
   /api/bookings/{id}/status/{newStatus}:
     patch:
@@ -204,6 +290,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Booking' }
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
 
 components:
   schemas:
@@ -211,9 +302,33 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
+        name: 
+          type: string
+          minLength: 1
+          description: Client name (required, non-empty)
+        email: 
+          type: string
+          format: email
+          description: Client email (optional, must be valid email format)
+        phone: 
+          type: string
+          description: Client phone number (optional)
+    
+    ClientUpdate:
+      type: object
+      properties:
+        name: 
+          type: string
+          minLength: 1
+          description: Updated client name (optional)
+        email: 
+          type: string
+          format: email
+          description: Updated email (optional, must be valid email format)
+        phone: 
+          type: string
+          description: Updated phone number (optional)
+    
     Client:
       allOf:
         - $ref: '#/components/schemas/ClientCreate'
@@ -221,19 +336,28 @@ components:
           properties:
             _id: { type: string }
             visitsCount: { type: integer, default: 0 }
-            loyaltyTier: { type: string }
+            loyaltyTier: 
+              type: string
+              enum: [Bronze, Silver, Gold]
+              description: Loyalty tier (Bronze ≥3 visits, Silver ≥8 visits, Gold ≥15 visits)
 
     MaterialCreate:
       type: object
-      required: [name, unit]
+      required: [name, unit, stockOnHand]
       properties:
-        name: { type: string }
+        name: 
+          type: string
+          minLength: 1
+          description: Material name (required, non-empty)
         unit:
           type: string
-          enum: [ml, g, pcs]
+          enum: [ml, g, kg, L, pcs]
+          description: Unit of measurement (required)
         stockOnHand:
           type: number
-          default: 0
+          minimum: 0
+          description: Current stock quantity (required, must be non-negative)
+    
     Material:
       allOf:
         - $ref: '#/components/schemas/MaterialCreate'
@@ -245,15 +369,32 @@ components:
       type: object
       required: [name, durationMin, price]
       properties:
-        name: { type: string }
-        durationMin: { type: integer, minimum: 1 }
-        price: { type: number, minimum: 0 }
+        name: 
+          type: string
+          minLength: 1
+          description: Procedure name (required, non-empty)
+        durationMin: 
+          type: integer
+          minimum: 1
+          description: Duration in minutes (required, must be positive)
+        price: 
+          type: number
+          minimum: 0.01
+          description: Price (required, must be positive)
+    
     BOMItem:
       type: object
       required: [materialId, qtyPerProcedure]
       properties:
-        materialId: { type: string }
-        qtyPerProcedure: { type: number, minimum: 0 }
+        materialId: 
+          type: string
+          minLength: 1
+          description: Material ID (required)
+        qtyPerProcedure: 
+          type: number
+          minimum: 0.01
+          description: Quantity used per procedure (required, must be positive)
+    
     Procedure:
       allOf:
         - $ref: '#/components/schemas/ProcedureCreate'
@@ -263,25 +404,65 @@ components:
             bom:
               type: array
               items: { $ref: '#/components/schemas/BOMItem' }
+              description: Bill of Materials - list of materials consumed
 
     BookingCreate:
       type: object
       required: [clientId, providerName, procedureId, startsAt, endsAt, status, paymentType]
       properties:
-        clientId: { type: string }
-        providerName: { type: string }
-        procedureId: { type: string }
-        startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
+        clientId: 
+          type: string
+          minLength: 1
+          description: Client ID (required)
+        providerName: 
+          type: string
+          minLength: 1
+          description: Provider/staff name (required, non-empty)
+        procedureId: 
+          type: string
+          minLength: 1
+          description: Procedure ID (required)
+        startsAt: 
+          type: string
+          format: date-time
+          description: Booking start time (required)
+        endsAt: 
+          type: string
+          format: date-time
+          description: Booking end time (required)
         status:
           type: string
           enum: [held, confirmed, fulfilled, cancelled]
+          description: Booking status (required)
         paymentType:
           type: string
           enum: [cash, card, deposit]
+          description: Payment method (required)
+    
     Booking:
       allOf:
         - $ref: '#/components/schemas/BookingCreate'
         - type: object
           properties:
             _id: { type: string }
+    
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Validation failed"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }
+    
+    NotFoundError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Client not found"

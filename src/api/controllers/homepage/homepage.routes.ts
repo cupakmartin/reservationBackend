@@ -1,9 +1,13 @@
 // src/api/controllers/homepage/homepage.routes.ts
-import { Router, Request, Response, NextFunction } from 'express'
-const router = Router
+import { Router } from 'express'
+const router = Router()
 
-export function errorMiddleware(err: any, _req: Request, res: Response, _next: NextFunction) {
-    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })
-}
+router.get('/', (_req, res) => {
+    res.json({ 
+        ok: true, 
+        name: 'GlowFlow API', 
+        version: '0.1.0' 
+    })
+})
 
 export default router
