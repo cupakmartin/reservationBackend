@@ -1,32 +1,30 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { createApp } from '../src/app'
-import { setupTestHooks } from './helpers'
+import { useSeeders, getAdminToken, getSeededData } from './helpers'
 import { Procedure } from '../src/database/models/procedure.model'
 import { Material } from '../src/database/models/material.model'
 
 const app = createApp()
-setupTestHooks()
+useSeeders()
 
 describe('Procedure API', () => {
+    let adminToken: string
+
+    beforeEach(async () => {
+        adminToken = await getAdminToken()
+    })
+
     describe('GET /api/procedures', () => {
-        it('should return empty array when no procedures', async () => {
-            const res = await request(app).get('/api/procedures')
+        it('should return all seeded procedures sorted by name', async () => {
+            const res = await request(app)
+                .get('/api/procedures')
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(200)
-            expect(res.body).toEqual([])
-        })
-
-        it('should return all procedures sorted by name', async () => {
-            await Procedure.create([
-                { name: 'Massage', durationMin: 60, price: 50 },
-                { name: 'Facial', durationMin: 45, price: 40 }
-            ])
-
-            const res = await request(app).get('/api/procedures')
-            expect(res.status).toBe(200)
-            expect(res.body).toHaveLength(2)
-            expect(res.body[0].name).toBe('Facial')
-            expect(res.body[1].name).toBe('Massage')
+            expect(res.body).toHaveLength(4) // Hydrating Facial, Botox, Laser, Chemical Peel
+            // First should be "Botox Injection" (alphabetically sorted)
+            expect(res.body[0].name).toBe('Botox Injection')
+            expect(res.body[1].name).toBe('Chemical Peel')
         })
     })
 
@@ -40,6 +38,7 @@ describe('Procedure API', () => {
 
             const res = await request(app)
                 .post('/api/procedures')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send(procedureData)
 
             expect(res.status).toBe(201)
@@ -52,6 +51,7 @@ describe('Procedure API', () => {
         it('should fail when name is missing', async () => {
             const res = await request(app)
                 .post('/api/procedures')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ durationMin: 60, price: 50 })
 
             expect(res.status).toBe(400)
@@ -61,6 +61,7 @@ describe('Procedure API', () => {
         it('should fail when durationMin is not positive', async () => {
             const res = await request(app)
                 .post('/api/procedures')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test', durationMin: 0, price: 50 })
 
             expect(res.status).toBe(400)
@@ -70,6 +71,7 @@ describe('Procedure API', () => {
         it('should fail when price is negative', async () => {
             const res = await request(app)
                 .post('/api/procedures')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test', durationMin: 30, price: -10 })
 
             expect(res.status).toBe(400)
@@ -79,6 +81,7 @@ describe('Procedure API', () => {
         it('should fail when price is not a number', async () => {
             const res = await request(app)
                 .post('/api/procedures')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test', durationMin: 30, price: 'free' })
 
             expect(res.status).toBe(400)
@@ -88,17 +91,9 @@ describe('Procedure API', () => {
 
     describe('POST /api/procedures/:id/bom', () => {
         it('should update procedure BOM with valid data', async () => {
-            const procedure = await Procedure.create({
-                name: 'Test Procedure',
-                durationMin: 30,
-                price: 25
-            })
-
-            const material = await Material.create({
-                name: 'Test Material',
-                unit: 'ml',
-                stockOnHand: 100
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.laserTherapy // Has no BOM by default
+            const material = seeded.materials.hyaluronicAcid
 
             const bom = [
                 { materialId: material._id.toString(), qtyPerProcedure: 5 }
@@ -106,6 +101,7 @@ describe('Procedure API', () => {
 
             const res = await request(app)
                 .post(`/api/procedures/${procedure._id}/bom`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send(bom)
 
             expect(res.status).toBe(200)
@@ -119,6 +115,7 @@ describe('Procedure API', () => {
         it('should return 404 for non-existent procedure', async () => {
             const res = await request(app)
                 .post('/api/procedures/507f1f77bcf86cd799439011/bom')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send([])
 
             expect(res.status).toBe(404)
@@ -126,14 +123,12 @@ describe('Procedure API', () => {
         })
 
         it('should fail when BOM item missing materialId', async () => {
-            const procedure = await Procedure.create({
-                name: 'Test',
-                durationMin: 30,
-                price: 25
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.chemicalPeel
 
             const res = await request(app)
                 .post(`/api/procedures/${procedure._id}/bom`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send([{ qtyPerProcedure: 5 }])
 
             expect(res.status).toBe(400)
@@ -141,14 +136,12 @@ describe('Procedure API', () => {
         })
 
         it('should fail when quantity is not positive', async () => {
-            const procedure = await Procedure.create({
-                name: 'Test',
-                durationMin: 30,
-                price: 25
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.botoxInjection
 
             const res = await request(app)
                 .post(`/api/procedures/${procedure._id}/bom`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send([{ materialId: '507f1f77bcf86cd799439011', qtyPerProcedure: 0 }])
 
             expect(res.status).toBe(400)
@@ -156,14 +149,12 @@ describe('Procedure API', () => {
         })
 
         it('should accept empty BOM', async () => {
-            const procedure = await Procedure.create({
-                name: 'Test',
-                durationMin: 30,
-                price: 25
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.facialTreatment
 
             const res = await request(app)
                 .post(`/api/procedures/${procedure._id}/bom`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send([])
 
             expect(res.status).toBe(200)
@@ -173,19 +164,20 @@ describe('Procedure API', () => {
 
     describe('GET /api/procedures/:id', () => {
         it('should return procedure by id', async () => {
-            const procedure = await Procedure.create({
-                name: 'Test Procedure',
-                durationMin: 60,
-                price: 100
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.facialTreatment
 
-            const res = await request(app).get(`/api/procedures/${procedure._id}`)
+            const res = await request(app)
+                .get(`/api/procedures/${procedure._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(200)
-            expect(res.body.name).toBe('Test Procedure')
+            expect(res.body.name).toBe('Hydrating Facial Treatment')
         })
 
         it('should return 404 for non-existent procedure', async () => {
-            const res = await request(app).get('/api/procedures/507f1f77bcf86cd799439011')
+            const res = await request(app)
+                .get('/api/procedures/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(404)
             expect(res.body.error).toBe('Procedure not found')
         })
@@ -193,25 +185,24 @@ describe('Procedure API', () => {
 
     describe('PUT /api/procedures/:id', () => {
         it('should update procedure', async () => {
-            const procedure = await Procedure.create({
-                name: 'Old Name',
-                durationMin: 60,
-                price: 100
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.laserTherapy
 
             const res = await request(app)
                 .put(`/api/procedures/${procedure._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'New Name', price: 150 })
 
             expect(res.status).toBe(200)
             expect(res.body.name).toBe('New Name')
             expect(res.body.price).toBe(150)
-            expect(res.body.durationMin).toBe(60)
+            expect(res.body.durationMin).toBe(45)
         })
 
         it('should return 404 for non-existent procedure', async () => {
             const res = await request(app)
                 .put('/api/procedures/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'New Name' })
             
             expect(res.status).toBe(404)
@@ -220,13 +211,12 @@ describe('Procedure API', () => {
 
     describe('DELETE /api/procedures/:id', () => {
         it('should delete procedure', async () => {
-            const procedure = await Procedure.create({
-                name: 'To Delete',
-                durationMin: 30,
-                price: 50
-            })
+            const seeded = getSeededData()
+            const procedure = seeded.procedures.chemicalPeel
 
-            const res = await request(app).delete(`/api/procedures/${procedure._id}`)
+            const res = await request(app)
+                .delete(`/api/procedures/${procedure._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(200)
             expect(res.body.ok).toBe(true)
 
@@ -235,7 +225,9 @@ describe('Procedure API', () => {
         })
 
         it('should return 404 for non-existent procedure', async () => {
-            const res = await request(app).delete('/api/procedures/507f1f77bcf86cd799439011')
+            const res = await request(app)
+                .delete('/api/procedures/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(404)
         })
     })

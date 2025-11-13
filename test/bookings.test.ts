@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest'
 import request from 'supertest'
 import { createApp } from '../src/app'
-import { setupTestHooks } from './helpers'
+import { useSeeders, getAdminToken, getWorkerToken, getSeededData } from './helpers'
 import { Booking } from '../src/database/models/booking.model'
 import { Client } from '../src/database/models/client.model'
 import { Procedure } from '../src/database/models/procedure.model'
@@ -9,7 +9,7 @@ import { Material } from '../src/database/models/material.model'
 import * as notificationService from '../src/services/notification.service'
 
 const app = createApp()
-setupTestHooks()
+useSeeders()
 
 // Mock email sending
 vi.mock('../src/services/notification.service', () => ({
@@ -17,80 +17,42 @@ vi.mock('../src/services/notification.service', () => ({
 }))
 
 describe('Booking API', () => {
-    let client: any
-    let procedure: any
-    let material: any
+    let adminToken: string
+    let workerToken: string
+    let seededData: any
 
     beforeEach(async () => {
-        client = await Client.create({
-            name: 'Test Client',
-            email: 'test@test.com',
-            phone: '123456'
-        })
-
-        material = await Material.create({
-            name: 'Test Material',
-            unit: 'ml',
-            stockOnHand: 100
-        })
-
-        procedure = await Procedure.create({
-            name: 'Test Procedure',
-            durationMin: 60,
-            price: 50,
-            bom: [{ materialId: material._id, qtyPerProcedure: 10 }]
-        })
+        // Get fresh reference to seeded data and tokens for each test
+        seededData = getSeededData()
+        adminToken = await getAdminToken()
+        workerToken = await getWorkerToken()
     })
 
     describe('GET /api/bookings', () => {
-        it('should return empty array when no bookings', async () => {
-            const res = await request(app).get('/api/bookings')
+        it('should return all seeded bookings', async () => {
+            const res = await request(app)
+                .get('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(200)
-            expect(res.body).toEqual([])
-        })
-
-        it('should return bookings sorted by creation date', async () => {
-            await Booking.create([
-                {
-                    clientId: client._id,
-                    providerName: 'Provider A',
-                    procedureId: procedure._id,
-                    startsAt: new Date('2025-12-01T10:00:00Z'),
-                    endsAt: new Date('2025-12-01T11:00:00Z'),
-                    status: 'confirmed',
-                    paymentType: 'card'
-                },
-                {
-                    clientId: client._id,
-                    providerName: 'Provider B',
-                    procedureId: procedure._id,
-                    startsAt: new Date('2025-12-02T10:00:00Z'),
-                    endsAt: new Date('2025-12-02T11:00:00Z'),
-                    status: 'held',
-                    paymentType: 'cash'
-                }
-            ])
-
-            const res = await request(app).get('/api/bookings')
-            expect(res.status).toBe(200)
-            expect(res.body).toHaveLength(2)
+            expect(res.body).toHaveLength(5) // 5 seeded bookings
         })
     })
 
     describe('POST /api/bookings', () => {
         it('should create a new booking with valid data', async () => {
             const bookingData = {
-                clientId: client._id.toString(),
+                clientId: seededData.clients.client1._id.toString(),
                 providerName: 'Dr. Smith',
-                procedureId: procedure._id.toString(),
-                startsAt: '2025-12-15T14:00:00Z',
-                endsAt: '2025-12-15T15:00:00Z',
+                procedureId: seededData.procedures.facialTreatment._id.toString(),
+                startsAt: '2025-12-25T14:00:00Z',
+                endsAt: '2025-12-25T15:00:00Z',
                 status: 'confirmed',
                 paymentType: 'card'
             }
 
             const res = await request(app)
                 .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send(bookingData)
 
             expect(res.status).toBe(201)
@@ -102,6 +64,7 @@ describe('Booking API', () => {
         it('should fail when required fields are missing', async () => {
             const res = await request(app)
                 .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send({ providerName: 'Test' })
 
             expect(res.status).toBe(400)
@@ -111,10 +74,11 @@ describe('Booking API', () => {
         it('should fail with invalid status', async () => {
             const res = await request(app)
                 .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send({
-                    clientId: client._id.toString(),
+                    clientId: seededData.clients.client1._id.toString(),
                     providerName: 'Test',
-                    procedureId: procedure._id.toString(),
+                    procedureId: seededData.procedures.facialTreatment._id.toString(),
                     startsAt: '2025-12-15T14:00:00Z',
                     endsAt: '2025-12-15T15:00:00Z',
                     status: 'invalid_status',
@@ -128,10 +92,11 @@ describe('Booking API', () => {
         it('should fail with invalid paymentType', async () => {
             const res = await request(app)
                 .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send({
-                    clientId: client._id.toString(),
+                    clientId: seededData.clients.client1._id.toString(),
                     providerName: 'Test',
-                    procedureId: procedure._id.toString(),
+                    procedureId: seededData.procedures.facialTreatment._id.toString(),
                     startsAt: '2025-12-15T14:00:00Z',
                     endsAt: '2025-12-15T15:00:00Z',
                     status: 'confirmed',
@@ -146,9 +111,9 @@ describe('Booking API', () => {
     describe('PATCH /api/bookings/:id/status/:newStatus', () => {
         it('should update booking status', async () => {
             const booking = await Booking.create({
-                clientId: client._id,
+                clientId: seededData.clients.client1._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
@@ -157,6 +122,7 @@ describe('Booking API', () => {
 
             const res = await request(app)
                 .patch(`/api/bookings/${booking._id}/status/cancelled`)
+                .set('Authorization', `Bearer ${workerToken}`)
 
             expect(res.status).toBe(200)
             expect(res.body.status).toBe('cancelled')
@@ -165,6 +131,7 @@ describe('Booking API', () => {
         it('should return 404 for non-existent booking', async () => {
             const res = await request(app)
                 .patch('/api/bookings/507f1f77bcf86cd799439011/status/cancelled')
+                .set('Authorization', `Bearer ${workerToken}`)
 
             expect(res.status).toBe(404)
             expect(res.body.error).toBe('Booking not found')
@@ -172,25 +139,27 @@ describe('Booking API', () => {
 
         it('should deduct material stock when status is fulfilled', async () => {
             const booking = await Booking.create({
-                clientId: client._id,
+                clientId: seededData.clients.client1._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id, // Has BOM with materials
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
                 paymentType: 'card'
             })
 
+            const material = seededData.materials.hyaluronicAcid
             const initialStock = material.stockOnHand
 
             const res = await request(app)
                 .patch(`/api/bookings/${booking._id}/status/fulfilled`)
+                .set('Authorization', `Bearer ${workerToken}`)
 
             expect(res.status).toBe(200)
             expect(res.body.status).toBe('fulfilled')
 
             const updatedMaterial = await Material.findById(material._id)
-            expect(updatedMaterial?.stockOnHand).toBe(initialStock - 10)
+            expect(updatedMaterial?.stockOnHand).toBe(initialStock - 10) // facialTreatment uses 10 units
         })
 
         it('should apply loyalty tier when booking is fulfilled', async () => {
@@ -204,7 +173,7 @@ describe('Booking API', () => {
             const booking = await Booking.create({
                 clientId: loyaltyClient._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
@@ -213,6 +182,7 @@ describe('Booking API', () => {
 
             await request(app)
                 .patch(`/api/bookings/${booking._id}/status/fulfilled`)
+                .set('Authorization', `Bearer ${workerToken}`)
 
             const updatedClient = await Client.findById(loyaltyClient._id)
             expect(updatedClient?.visitsCount).toBe(3)
@@ -230,7 +200,7 @@ describe('Booking API', () => {
             const booking = await Booking.create({
                 clientId: loyaltyClient._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
@@ -239,6 +209,7 @@ describe('Booking API', () => {
 
             await request(app)
                 .patch(`/api/bookings/${booking._id}/status/fulfilled`)
+                .set('Authorization', `Bearer ${workerToken}`)
 
             const updatedClient = await Client.findById(loyaltyClient._id)
             expect(updatedClient?.visitsCount).toBe(8)
@@ -256,7 +227,7 @@ describe('Booking API', () => {
             const booking = await Booking.create({
                 clientId: loyaltyClient._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
@@ -265,6 +236,7 @@ describe('Booking API', () => {
 
             await request(app)
                 .patch(`/api/bookings/${booking._id}/status/fulfilled`)
+                .set('Authorization', `Bearer ${workerToken}`)
 
             const updatedClient = await Client.findById(loyaltyClient._id)
             expect(updatedClient?.visitsCount).toBe(15)
@@ -275,22 +247,26 @@ describe('Booking API', () => {
     describe('GET /api/bookings/:id', () => {
         it('should return booking by id', async () => {
             const booking = await Booking.create({
-                clientId: client._id,
+                clientId: seededData.clients.client1._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
                 paymentType: 'card'
             })
 
-            const res = await request(app).get(`/api/bookings/${booking._id}`)
+            const res = await request(app)
+                .get(`/api/bookings/${booking._id}`)
+                .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(200)
             expect(res.body.providerName).toBe('Test Provider')
         })
 
         it('should return 404 for non-existent booking', async () => {
-            const res = await request(app).get('/api/bookings/507f1f77bcf86cd799439011')
+            const res = await request(app)
+                .get('/api/bookings/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(404)
             expect(res.body.error).toBe('Booking not found')
         })
@@ -299,9 +275,9 @@ describe('Booking API', () => {
     describe('PUT /api/bookings/:id', () => {
         it('should update booking', async () => {
             const booking = await Booking.create({
-                clientId: client._id,
+                clientId: seededData.clients.client1._id,
                 providerName: 'Old Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'held',
@@ -310,6 +286,7 @@ describe('Booking API', () => {
 
             const res = await request(app)
                 .put(`/api/bookings/${booking._id}`)
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send({ 
                     providerName: 'New Provider',
                     status: 'confirmed'
@@ -323,6 +300,7 @@ describe('Booking API', () => {
         it('should return 404 for non-existent booking', async () => {
             const res = await request(app)
                 .put('/api/bookings/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send({ providerName: 'New Provider' })
             
             expect(res.status).toBe(404)
@@ -330,9 +308,9 @@ describe('Booking API', () => {
 
         it('should reject invalid status on update', async () => {
             const booking = await Booking.create({
-                clientId: client._id,
+                clientId: seededData.clients.client1._id,
                 providerName: 'Test Provider',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
@@ -341,6 +319,7 @@ describe('Booking API', () => {
 
             const res = await request(app)
                 .put(`/api/bookings/${booking._id}`)
+                .set('Authorization', `Bearer ${workerToken}`)
                 .send({ status: 'invalid' })
 
             expect(res.status).toBe(400)
@@ -350,16 +329,18 @@ describe('Booking API', () => {
     describe('DELETE /api/bookings/:id', () => {
         it('should delete booking', async () => {
             const booking = await Booking.create({
-                clientId: client._id,
+                clientId: seededData.clients.client1._id,
                 providerName: 'To Delete',
-                procedureId: procedure._id,
+                procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
                 paymentType: 'card'
             })
 
-            const res = await request(app).delete(`/api/bookings/${booking._id}`)
+            const res = await request(app)
+                .delete(`/api/bookings/${booking._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(200)
             expect(res.body.ok).toBe(true)
 
@@ -368,7 +349,9 @@ describe('Booking API', () => {
         })
 
         it('should return 404 for non-existent booking', async () => {
-            const res = await request(app).delete('/api/bookings/507f1f77bcf86cd799439011')
+            const res = await request(app)
+                .delete('/api/bookings/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(404)
         })
     })

@@ -1,31 +1,30 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { createApp } from '../src/app'
-import { setupTestHooks } from './helpers'
+import { useSeeders, getAdminToken, getWorkerToken, getSeededData } from './helpers'
 import { Material } from '../src/database/models/material.model'
 
 const app = createApp()
-setupTestHooks()
+useSeeders()
 
 describe('Material API', () => {
+    let adminToken: string
+    let workerToken: string
+
+    beforeEach(async () => {
+        adminToken = await getAdminToken()
+        workerToken = await getWorkerToken()
+    })
+
     describe('GET /api/materials', () => {
-        it('should return empty array when no materials', async () => {
-            const res = await request(app).get('/api/materials')
+        it('should return all seeded materials sorted by name', async () => {
+            const res = await request(app)
+                .get('/api/materials')
+                .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(200)
-            expect(res.body).toEqual([])
-        })
-
-        it('should return all materials sorted by name', async () => {
-            await Material.create([
-                { name: 'Zinc Oxide', unit: 'g', stockOnHand: 10 },
-                { name: 'Aloe Vera', unit: 'ml', stockOnHand: 5 }
-            ])
-
-            const res = await request(app).get('/api/materials')
-            expect(res.status).toBe(200)
-            expect(res.body).toHaveLength(2)
-            expect(res.body[0].name).toBe('Aloe Vera')
-            expect(res.body[1].name).toBe('Zinc Oxide')
+            expect(res.body).toHaveLength(4) // Hyaluronic Acid, Botox, Collagen Serum, Vitamin C Serum
+            // First should be "Botox" (alphabetically sorted)
+            expect(res.body[0].name).toBe('Botox')
         })
     })
 
@@ -39,6 +38,7 @@ describe('Material API', () => {
 
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send(materialData)
 
             expect(res.status).toBe(201)
@@ -51,6 +51,7 @@ describe('Material API', () => {
         it('should fail when name is missing', async () => {
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ unit: 'kg', stockOnHand: 10 })
 
             expect(res.status).toBe(400)
@@ -60,6 +61,7 @@ describe('Material API', () => {
         it('should fail when unit is missing', async () => {
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test Material', stockOnHand: 10 })
 
             expect(res.status).toBe(400)
@@ -69,6 +71,7 @@ describe('Material API', () => {
         it('should fail when stockOnHand is negative', async () => {
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test', unit: 'g', stockOnHand: -5 })
 
             expect(res.status).toBe(400)
@@ -78,6 +81,7 @@ describe('Material API', () => {
         it('should fail when stockOnHand is not a number', async () => {
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test', unit: 'g', stockOnHand: 'invalid' })
 
             expect(res.status).toBe(400)
@@ -87,6 +91,7 @@ describe('Material API', () => {
         it('should accept zero stock', async () => {
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Zero Stock', unit: 'g', stockOnHand: 0 })
 
             expect(res.status).toBe(201)
@@ -96,6 +101,7 @@ describe('Material API', () => {
         it('should reject invalid unit value', async () => {
             const res = await request(app)
                 .post('/api/materials')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'Test', unit: 'L', stockOnHand: 10 })
 
             expect(res.status).toBe(400)
@@ -105,19 +111,20 @@ describe('Material API', () => {
 
     describe('GET /api/materials/:id', () => {
         it('should return material by id', async () => {
-            const material = await Material.create({
-                name: 'Test Material',
-                unit: 'ml',
-                stockOnHand: 50
-            })
+            const seeded = getSeededData()
+            const material = seeded.materials.hyaluronicAcid
 
-            const res = await request(app).get(`/api/materials/${material._id}`)
+            const res = await request(app)
+                .get(`/api/materials/${material._id}`)
+                .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(200)
-            expect(res.body.name).toBe('Test Material')
+            expect(res.body.name).toBe('Hyaluronic Acid')
         })
 
         it('should return 404 for non-existent material', async () => {
-            const res = await request(app).get('/api/materials/507f1f77bcf86cd799439011')
+            const res = await request(app)
+                .get('/api/materials/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(404)
             expect(res.body.error).toBe('Material not found')
         })
@@ -125,14 +132,12 @@ describe('Material API', () => {
 
     describe('PUT /api/materials/:id', () => {
         it('should update material', async () => {
-            const material = await Material.create({
-                name: 'Old Name',
-                unit: 'ml',
-                stockOnHand: 50
-            })
+            const seeded = getSeededData()
+            const material = seeded.materials.botox
 
             const res = await request(app)
                 .put(`/api/materials/${material._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'New Name', stockOnHand: 100 })
 
             expect(res.status).toBe(200)
@@ -143,20 +148,19 @@ describe('Material API', () => {
         it('should return 404 for non-existent material', async () => {
             const res = await request(app)
                 .put('/api/materials/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ name: 'New Name' })
             
             expect(res.status).toBe(404)
         })
 
         it('should reject invalid unit on update', async () => {
-            const material = await Material.create({
-                name: 'Test',
-                unit: 'ml',
-                stockOnHand: 50
-            })
+            const seeded = getSeededData()
+            const material = seeded.materials.collagen
 
             const res = await request(app)
                 .put(`/api/materials/${material._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
                 .send({ unit: 'liters' })
 
             expect(res.status).toBe(400)
@@ -165,13 +169,12 @@ describe('Material API', () => {
 
     describe('DELETE /api/materials/:id', () => {
         it('should delete material', async () => {
-            const material = await Material.create({
-                name: 'To Delete',
-                unit: 'ml',
-                stockOnHand: 50
-            })
+            const seeded = getSeededData()
+            const material = seeded.materials.vitaminC
 
-            const res = await request(app).delete(`/api/materials/${material._id}`)
+            const res = await request(app)
+                .delete(`/api/materials/${material._id}`)
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(200)
             expect(res.body.ok).toBe(true)
 
@@ -180,7 +183,9 @@ describe('Material API', () => {
         })
 
         it('should return 404 for non-existent material', async () => {
-            const res = await request(app).delete('/api/materials/507f1f77bcf86cd799439011')
+            const res = await request(app)
+                .delete('/api/materials/507f1f77bcf86cd799439011')
+                .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(404)
         })
     })

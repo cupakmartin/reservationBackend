@@ -6,6 +6,7 @@ servers:
   - url: http://localhost:4000
 
 tags:
+  - name: Authentication
   - name: Clients
   - name: Materials
   - name: Procedures
@@ -28,10 +29,99 @@ paths:
                   name: { type: string }
                   version: { type: string }
 
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, minLength: 2 }
+                email: { type: string, format: email }
+                phone: { type: string }
+                password: { type: string, minLength: 6 }
+                role: { type: string, enum: [client, worker, admin], default: client }
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '409':
+          description: User already exists
+        '400':
+          description: Validation error
+
+  /api/auth/login:
+    post:
+      summary: Login with email and password
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '401':
+          description: Invalid credentials
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh access token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '401':
+          description: Invalid refresh token
+
   /api/clients:
     get:
-      summary: List clients
+      summary: List clients (Admin/Worker only)
       tags: [Clients]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Array of clients
@@ -40,8 +130,12 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Client' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Insufficient permissions
     post:
-      summary: Create client
+      summary: Create client (Public - use /api/auth/register instead)
       tags: [Clients]
       requestBody:
         required: true
@@ -64,8 +158,10 @@ paths:
 
   /api/clients/{id}:
     get:
-      summary: Get client by ID
+      summary: Get client by ID (Own profile or Admin/Worker)
       tags: [Clients]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -77,14 +173,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Client' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only view own profile
         '404':
           description: Client not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     put:
-      summary: Update client
+      summary: Update client (Own profile or Admin)
       tags: [Clients]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -108,14 +210,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only update own profile
         '404':
           description: Client not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     delete:
-      summary: Delete client
+      summary: Delete client (Admin only)
       tags: [Clients]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -131,6 +239,10 @@ paths:
                 properties:
                   ok: { type: boolean }
                   message: { type: string }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Client not found
           content:
@@ -139,8 +251,10 @@ paths:
 
   /api/materials:
     get:
-      summary: List materials
+      summary: List materials (Worker/Admin only)
       tags: [Materials]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Array of materials
@@ -149,9 +263,15 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Material' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Worker/Admin only
     post:
-      summary: Create material
+      summary: Create material (Admin only)
       tags: [Materials]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -170,11 +290,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
 
   /api/materials/{id}:
     get:
-      summary: Get material by ID
+      summary: Get material by ID (Worker/Admin only)
       tags: [Materials]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -186,14 +312,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Material' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Worker/Admin only
         '404':
           description: Material not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     put:
-      summary: Update material
+      summary: Update material (Admin only)
       tags: [Materials]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -217,14 +349,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Material not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     delete:
-      summary: Delete material
+      summary: Delete material (Admin only)
       tags: [Materials]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -240,6 +378,10 @@ paths:
                 properties:
                   ok: { type: boolean }
                   message: { type: string }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Material not found
           content:
@@ -248,8 +390,10 @@ paths:
 
   /api/procedures:
     get:
-      summary: List procedures
+      summary: List procedures (Authenticated users)
       tags: [Procedures]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Array of procedures
@@ -258,9 +402,13 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Procedure' }
+        '401':
+          description: Unauthorized
     post:
-      summary: Create procedure
+      summary: Create procedure (Admin only)
       tags: [Procedures]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -279,11 +427,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
 
   /api/procedures/{id}:
     get:
-      summary: Get procedure by ID
+      summary: Get procedure by ID (Authenticated users)
       tags: [Procedures]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -295,14 +449,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Procedure' }
+        '401':
+          description: Unauthorized
         '404':
           description: Procedure not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     put:
-      summary: Update procedure
+      summary: Update procedure (Admin only)
       tags: [Procedures]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -326,14 +484,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Procedure not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     delete:
-      summary: Delete procedure
+      summary: Delete procedure (Admin only)
       tags: [Procedures]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -349,6 +513,10 @@ paths:
                 properties:
                   ok: { type: boolean }
                   message: { type: string }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Procedure not found
           content:
@@ -357,8 +525,10 @@ paths:
 
   /api/procedures/{id}/bom:
     post:
-      summary: Set procedure BOM (materials consumption)
+      summary: Set procedure BOM (Admin only)
       tags: [Procedures]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -389,6 +559,10 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Procedure not found
           content:
@@ -397,8 +571,10 @@ paths:
 
   /api/bookings:
     get:
-      summary: List recent bookings
+      summary: List bookings (Clients see own, Workers/Admins see all)
       tags: [Bookings]
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Array of bookings
@@ -407,9 +583,13 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Booking' }
+        '401':
+          description: Unauthorized
     post:
-      summary: Create booking (sends emails)
+      summary: Create booking (Authenticated users)
       tags: [Bookings]
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -436,11 +616,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
 
   /api/bookings/{id}:
     get:
-      summary: Get booking by ID
+      summary: Get booking by ID (Own booking or Worker/Admin)
       tags: [Bookings]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -457,9 +641,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only view own booking
     put:
-      summary: Update booking
+      summary: Update booking (Own booking or Worker/Admin)
       tags: [Bookings]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -491,14 +681,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only update own booking
         '404':
           description: Booking not found
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotFoundError' }
     delete:
-      summary: Delete booking
+      summary: Delete booking (Admin only)
       tags: [Bookings]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -514,6 +710,10 @@ paths:
                 properties:
                   ok: { type: boolean }
                   message: { type: string }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin only
         '404':
           description: Booking not found
           content:
@@ -522,8 +722,10 @@ paths:
 
   /api/bookings/{id}/status/{newStatus}:
     patch:
-      summary: Update booking status (fulfill → deduct stock & increment loyalty)
+      summary: Update booking status (Worker/Admin only)
       tags: [Bookings]
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -717,3 +919,23 @@ components:
         error:
           type: string
           example: "Client not found"
+    
+    User:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        role: { type: string, enum: [client, worker, admin] }
+        loyaltyPoints: { type: number }
+        visitsCount: { type: number }
+        loyaltyTier: { type: string }
+        createdAt: { type: string, format: date-time }
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login or /api/auth/register
