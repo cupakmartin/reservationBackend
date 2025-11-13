@@ -63,6 +63,25 @@ paths:
               schema: { $ref: '#/components/schemas/ValidationError' }
 
   /api/clients/{id}:
+    get:
+      summary: Get client by ID
+      tags: [Clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Client details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
     put:
       summary: Update client
       tags: [Clients]
@@ -152,6 +171,81 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
 
+  /api/materials/{id}:
+    get:
+      summary: Get material by ID
+      tags: [Materials]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Material details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Material' }
+        '404':
+          description: Material not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    put:
+      summary: Update material
+      tags: [Materials]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaterialCreate' }
+            examples:
+              update: { value: { name: "Updated Tint", unit: "ml", stockOnHand: 150 } }
+      responses:
+        '200':
+          description: Updated material
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Material' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '404':
+          description: Material not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    delete:
+      summary: Delete material
+      tags: [Materials]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Material deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+        '404':
+          description: Material not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+
   /api/procedures:
     get:
       summary: List procedures
@@ -185,6 +279,81 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+
+  /api/procedures/{id}:
+    get:
+      summary: Get procedure by ID
+      tags: [Procedures]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Procedure details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Procedure' }
+        '404':
+          description: Procedure not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    put:
+      summary: Update procedure
+      tags: [Procedures]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProcedureCreate' }
+            examples:
+              update: { value: { name: "Updated Brow Tint", durationMin: 50, price: 700 } }
+      responses:
+        '200':
+          description: Updated procedure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Procedure' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '404':
+          description: Procedure not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    delete:
+      summary: Delete procedure
+      tags: [Procedures]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Procedure deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+        '404':
+          description: Procedure not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
 
   /api/procedures/{id}/bom:
     post:
@@ -267,6 +436,89 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationError' }
+
+  /api/bookings/{id}:
+    get:
+      summary: Get booking by ID
+      tags: [Bookings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Booking details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    put:
+      summary: Update booking
+      tags: [Bookings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookingCreate' }
+            examples:
+              update:
+                value:
+                  clientId: "64f0b5..."
+                  providerName: "Eva Updated"
+                  procedureId: "64f0b6..."
+                  startsAt: "2025-10-10T11:00:00.000Z"
+                  endsAt: "2025-10-10T11:45:00.000Z"
+                  status: "confirmed"
+                  paymentType: "card"
+      responses:
+        '200':
+          description: Updated booking
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
+    delete:
+      summary: Delete booking
+      tags: [Bookings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Booking deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  message: { type: string }
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotFoundError' }
 
   /api/bookings/{id}/status/{newStatus}:
     patch:

@@ -271,4 +271,105 @@ describe('Booking API', () => {
             expect(updatedClient?.loyaltyTier).toBe('Gold')
         })
     })
+
+    describe('GET /api/bookings/:id', () => {
+        it('should return booking by id', async () => {
+            const booking = await Booking.create({
+                clientId: client._id,
+                providerName: 'Test Provider',
+                procedureId: procedure._id,
+                startsAt: new Date('2025-12-15T14:00:00Z'),
+                endsAt: new Date('2025-12-15T15:00:00Z'),
+                status: 'confirmed',
+                paymentType: 'card'
+            })
+
+            const res = await request(app).get(`/api/bookings/${booking._id}`)
+            expect(res.status).toBe(200)
+            expect(res.body.providerName).toBe('Test Provider')
+        })
+
+        it('should return 404 for non-existent booking', async () => {
+            const res = await request(app).get('/api/bookings/507f1f77bcf86cd799439011')
+            expect(res.status).toBe(404)
+            expect(res.body.error).toBe('Booking not found')
+        })
+    })
+
+    describe('PUT /api/bookings/:id', () => {
+        it('should update booking', async () => {
+            const booking = await Booking.create({
+                clientId: client._id,
+                providerName: 'Old Provider',
+                procedureId: procedure._id,
+                startsAt: new Date('2025-12-15T14:00:00Z'),
+                endsAt: new Date('2025-12-15T15:00:00Z'),
+                status: 'held',
+                paymentType: 'cash'
+            })
+
+            const res = await request(app)
+                .put(`/api/bookings/${booking._id}`)
+                .send({ 
+                    providerName: 'New Provider',
+                    status: 'confirmed'
+                })
+
+            expect(res.status).toBe(200)
+            expect(res.body.providerName).toBe('New Provider')
+            expect(res.body.status).toBe('confirmed')
+        })
+
+        it('should return 404 for non-existent booking', async () => {
+            const res = await request(app)
+                .put('/api/bookings/507f1f77bcf86cd799439011')
+                .send({ providerName: 'New Provider' })
+            
+            expect(res.status).toBe(404)
+        })
+
+        it('should reject invalid status on update', async () => {
+            const booking = await Booking.create({
+                clientId: client._id,
+                providerName: 'Test Provider',
+                procedureId: procedure._id,
+                startsAt: new Date('2025-12-15T14:00:00Z'),
+                endsAt: new Date('2025-12-15T15:00:00Z'),
+                status: 'confirmed',
+                paymentType: 'card'
+            })
+
+            const res = await request(app)
+                .put(`/api/bookings/${booking._id}`)
+                .send({ status: 'invalid' })
+
+            expect(res.status).toBe(400)
+        })
+    })
+
+    describe('DELETE /api/bookings/:id', () => {
+        it('should delete booking', async () => {
+            const booking = await Booking.create({
+                clientId: client._id,
+                providerName: 'To Delete',
+                procedureId: procedure._id,
+                startsAt: new Date('2025-12-15T14:00:00Z'),
+                endsAt: new Date('2025-12-15T15:00:00Z'),
+                status: 'confirmed',
+                paymentType: 'card'
+            })
+
+            const res = await request(app).delete(`/api/bookings/${booking._id}`)
+            expect(res.status).toBe(200)
+            expect(res.body.ok).toBe(true)
+
+            const check = await Booking.findById(booking._id)
+            expect(check).toBeNull()
+        })
+
+        it('should return 404 for non-existent booking', async () => {
+            const res = await request(app).delete('/api/bookings/507f1f77bcf86cd799439011')
+            expect(res.status).toBe(404)
+        })
+    })
 })

@@ -92,5 +92,96 @@ describe('Material API', () => {
             expect(res.status).toBe(201)
             expect(res.body.stockOnHand).toBe(0)
         })
+
+        it('should reject invalid unit value', async () => {
+            const res = await request(app)
+                .post('/api/materials')
+                .send({ name: 'Test', unit: 'L', stockOnHand: 10 })
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Validation failed')
+        })
+    })
+
+    describe('GET /api/materials/:id', () => {
+        it('should return material by id', async () => {
+            const material = await Material.create({
+                name: 'Test Material',
+                unit: 'ml',
+                stockOnHand: 50
+            })
+
+            const res = await request(app).get(`/api/materials/${material._id}`)
+            expect(res.status).toBe(200)
+            expect(res.body.name).toBe('Test Material')
+        })
+
+        it('should return 404 for non-existent material', async () => {
+            const res = await request(app).get('/api/materials/507f1f77bcf86cd799439011')
+            expect(res.status).toBe(404)
+            expect(res.body.error).toBe('Material not found')
+        })
+    })
+
+    describe('PUT /api/materials/:id', () => {
+        it('should update material', async () => {
+            const material = await Material.create({
+                name: 'Old Name',
+                unit: 'ml',
+                stockOnHand: 50
+            })
+
+            const res = await request(app)
+                .put(`/api/materials/${material._id}`)
+                .send({ name: 'New Name', stockOnHand: 100 })
+
+            expect(res.status).toBe(200)
+            expect(res.body.name).toBe('New Name')
+            expect(res.body.stockOnHand).toBe(100)
+        })
+
+        it('should return 404 for non-existent material', async () => {
+            const res = await request(app)
+                .put('/api/materials/507f1f77bcf86cd799439011')
+                .send({ name: 'New Name' })
+            
+            expect(res.status).toBe(404)
+        })
+
+        it('should reject invalid unit on update', async () => {
+            const material = await Material.create({
+                name: 'Test',
+                unit: 'ml',
+                stockOnHand: 50
+            })
+
+            const res = await request(app)
+                .put(`/api/materials/${material._id}`)
+                .send({ unit: 'liters' })
+
+            expect(res.status).toBe(400)
+        })
+    })
+
+    describe('DELETE /api/materials/:id', () => {
+        it('should delete material', async () => {
+            const material = await Material.create({
+                name: 'To Delete',
+                unit: 'ml',
+                stockOnHand: 50
+            })
+
+            const res = await request(app).delete(`/api/materials/${material._id}`)
+            expect(res.status).toBe(200)
+            expect(res.body.ok).toBe(true)
+
+            const check = await Material.findById(material._id)
+            expect(check).toBeNull()
+        })
+
+        it('should return 404 for non-existent material', async () => {
+            const res = await request(app).delete('/api/materials/507f1f77bcf86cd799439011')
+            expect(res.status).toBe(404)
+        })
     })
 })

@@ -1,21 +1,12 @@
+import { beforeAll } from 'vitest'
 import mongoose from 'mongoose'
-import { beforeAll, afterAll } from 'vitest'
-import { MongoMemoryServer } from 'mongodb-memory-server'
+import { setupTestHooks } from './helpers'
 
-let mongoServer: MongoMemoryServer
+process.env.NODE_ENV = 'test'
 
 beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create()
-    const mongoUri = mongoServer.getUri()
+    const mongoUri = process.env.MONGO_URI_TEST || 'mongodb://localhost:27017/salon-test'
     await mongoose.connect(mongoUri)
-}, 60000)
+})
 
-afterAll(async () => {
-    if (mongoose.connection.readyState !== 0) {
-        await mongoose.connection.dropDatabase()
-        await mongoose.connection.close()
-    }
-    if (mongoServer) {
-        await mongoServer.stop()
-    }
-}, 60000)
+setupTestHooks()

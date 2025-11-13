@@ -1,11 +1,23 @@
-import { Schema, model } from 'mongoose'
+import mongoose, { Document, Schema } from 'mongoose';
 
-const ClientSchema = new Schema({
-    name: { type: String, required: true },
-    email: { type: String },
-    phone: { type: String },
-    visitsCount: { type: Number, default: 0 },
-    loyaltyTier: { type: String }
-}, { timestamps: true })
+export interface IClient extends Document {
+  name: string;
+  email: string;
+  phone: string;
+  loyaltyPoints: number;
+  visitsCount?: number;
+  loyaltyTier?: string;
+  createdAt: Date;
+}
 
-export const Client = model('Client', ClientSchema)
+const ClientSchema: Schema = new Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: false, unique: true, sparse: true },
+  phone: { type: String, required: false },
+  loyaltyPoints: { type: Number, default: 0 },
+  visitsCount: { type: Number, default: 0 },
+  loyaltyTier: { type: String, required: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const Client = mongoose.model<IClient>('Client', ClientSchema);

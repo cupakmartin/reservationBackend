@@ -13,8 +13,16 @@ export async function clearDatabase() {
     ])
 }
 
+export async function seedBaselineData() {
+    // Optional: Seed baseline data for specific tests that need it
+    // Most tests create their own data, so this is typically not needed
+    // Tests can call this function explicitly if they need baseline data
+}
+
 export function setupTestHooks() {
     beforeEach(async () => {
         await clearDatabase()
+        // Note: We don't seed baseline data by default
+        // Tests should create their own data as needed
     })
 }

@@ -5,9 +5,9 @@ import { createApp } from '../src/app'
 const app = createApp()
 
 describe('General API', () => {
-    describe('GET /', () => {
+    describe('GET /api-info', () => {
         it('should return API info', async () => {
-            const res = await request(app).get('/')
+            const res = await request(app).get('/api-info')
             
             expect(res.status).toBe(200)
             expect(res.body.ok).toBe(true)

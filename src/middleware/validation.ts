@@ -17,8 +17,18 @@ export const updateClientSchema = z.object({
 // Material Schema
 export const createMaterialSchema = z.object({
     name: z.string().min(1, 'Name is required'),
-    unit: z.string().min(1, 'Unit is required'),
+    unit: z.enum(['ml', 'g', 'pcs'], { 
+        errorMap: () => ({ message: 'Unit must be one of: ml, g, pcs' })
+    }),
     stockOnHand: z.number().nonnegative('Stock must be non-negative')
+})
+
+export const updateMaterialSchema = z.object({
+    name: z.string().min(1, 'Name is required').optional(),
+    unit: z.enum(['ml', 'g', 'pcs'], {
+        errorMap: () => ({ message: 'Unit must be one of: ml, g, pcs' })
+    }).optional(),
+    stockOnHand: z.number().nonnegative('Stock must be non-negative').optional()
 })
 
 // Procedure Schema
@@ -26,6 +36,12 @@ export const createProcedureSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     durationMin: z.number().positive('Duration must be positive'),
     price: z.number().positive('Price must be positive')
+})
+
+export const updateProcedureSchema = z.object({
+    name: z.string().min(1, 'Name is required').optional(),
+    durationMin: z.number().positive('Duration must be positive').optional(),
+    price: z.number().positive('Price must be positive').optional()
 })
 
 // BOM Schema
@@ -43,8 +59,26 @@ export const createBookingSchema = z.object({
     procedureId: z.string().min(1, 'Procedure ID is required'),
     startsAt: z.string().datetime().or(z.date()),
     endsAt: z.string().datetime().or(z.date()),
-    status: z.enum(['held', 'confirmed', 'fulfilled', 'cancelled']),
-    paymentType: z.enum(['cash', 'card', 'deposit'])
+    status: z.enum(['held', 'confirmed', 'fulfilled', 'cancelled'], {
+        errorMap: () => ({ message: 'Status must be one of: held, confirmed, fulfilled, cancelled' })
+    }),
+    paymentType: z.enum(['cash', 'card', 'deposit'], {
+        errorMap: () => ({ message: 'Payment type must be one of: cash, card, deposit' })
+    })
+})
+
+export const updateBookingSchema = z.object({
+    clientId: z.string().min(1, 'Client ID is required').optional(),
+    providerName: z.string().min(1, 'Provider name is required').optional(),
+    procedureId: z.string().min(1, 'Procedure ID is required').optional(),
+    startsAt: z.string().datetime().or(z.date()).optional(),
+    endsAt: z.string().datetime().or(z.date()).optional(),
+    status: z.enum(['held', 'confirmed', 'fulfilled', 'cancelled'], {
+        errorMap: () => ({ message: 'Status must be one of: held, confirmed, fulfilled, cancelled' })
+    }).optional(),
+    paymentType: z.enum(['cash', 'card', 'deposit'], {
+        errorMap: () => ({ message: 'Payment type must be one of: cash, card, deposit' })
+    }).optional()
 })
 
 // Validation Middleware Factory

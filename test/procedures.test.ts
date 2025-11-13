@@ -170,4 +170,73 @@ describe('Procedure API', () => {
             expect(res.body.ok).toBe(true)
         })
     })
+
+    describe('GET /api/procedures/:id', () => {
+        it('should return procedure by id', async () => {
+            const procedure = await Procedure.create({
+                name: 'Test Procedure',
+                durationMin: 60,
+                price: 100
+            })
+
+            const res = await request(app).get(`/api/procedures/${procedure._id}`)
+            expect(res.status).toBe(200)
+            expect(res.body.name).toBe('Test Procedure')
+        })
+
+        it('should return 404 for non-existent procedure', async () => {
+            const res = await request(app).get('/api/procedures/507f1f77bcf86cd799439011')
+            expect(res.status).toBe(404)
+            expect(res.body.error).toBe('Procedure not found')
+        })
+    })
+
+    describe('PUT /api/procedures/:id', () => {
+        it('should update procedure', async () => {
+            const procedure = await Procedure.create({
+                name: 'Old Name',
+                durationMin: 60,
+                price: 100
+            })
+
+            const res = await request(app)
+                .put(`/api/procedures/${procedure._id}`)
+                .send({ name: 'New Name', price: 150 })
+
+            expect(res.status).toBe(200)
+            expect(res.body.name).toBe('New Name')
+            expect(res.body.price).toBe(150)
+            expect(res.body.durationMin).toBe(60)
+        })
+
+        it('should return 404 for non-existent procedure', async () => {
+            const res = await request(app)
+                .put('/api/procedures/507f1f77bcf86cd799439011')
+                .send({ name: 'New Name' })
+            
+            expect(res.status).toBe(404)
+        })
+    })
+
+    describe('DELETE /api/procedures/:id', () => {
+        it('should delete procedure', async () => {
+            const procedure = await Procedure.create({
+                name: 'To Delete',
+                durationMin: 30,
+                price: 50
+            })
+
+            const res = await request(app).delete(`/api/procedures/${procedure._id}`)
+            expect(res.status).toBe(200)
+            expect(res.body.ok).toBe(true)
+
+            const check = await Procedure.findById(procedure._id)
+            expect(check).toBeNull()
+        })
+
+        it('should return 404 for non-existent procedure', async () => {
+            const res = await request(app).delete('/api/procedures/507f1f77bcf86cd799439011')
+            expect(res.status).toBe(404)
+        })
+    })
 })

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmetic Reservation API - Developer GUI</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Cosmetic Reservation API - Developer GUI</h1>
+            <p class="subtitle">Test all API endpoints without using the terminal</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="clients">Clients</button>
+            <button class="tab-btn" data-tab="materials">Materials</button>
+            <button class="tab-btn" data-tab="procedures">Procedures</button>
+            <button class="tab-btn" data-tab="bookings">Bookings</button>
+        </div>
+
+        <!-- Clients Tab -->
+        <div class="tab-content active" id="clients">
+            <h2>Clients Management</h2>
+            
+            <div class="section">
+                <h3>Create Client (POST /api/clients)</h3>
+                <form id="createClientForm">
+                    <input type="text" name="name" placeholder="Name *" required>
+                    <input type="email" name="email" placeholder="Email">
+                    <input type="text" name="phone" placeholder="Phone">
+                    <button type="submit">Create Client</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Get All Clients (GET /api/clients)</h3>
+                <button onclick="getAllClients()">Get All Clients</button>
+            </div>
+
+            <div class="section">
+                <h3>Get Client by ID (GET /api/clients/:id)</h3>
+                <input type="text" id="getClientId" placeholder="Client ID">
+                <button onclick="getClientById()">Get Client</button>
+            </div>
+
+            <div class="section">
+                <h3>Update Client (PUT /api/clients/:id)</h3>
+                <form id="updateClientForm">
+                    <input type="text" name="id" placeholder="Client ID *" required>
+                    <input type="text" name="name" placeholder="New Name">
+                    <input type="email" name="email" placeholder="New Email">
+                    <input type="text" name="phone" placeholder="New Phone">
+                    <button type="submit">Update Client</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Delete Client (DELETE /api/clients/:id)</h3>
+                <input type="text" id="deleteClientId" placeholder="Client ID">
+                <button onclick="deleteClient()">Delete Client</button>
+            </div>
+        </div>
+
+        <!-- Materials Tab -->
+        <div class="tab-content" id="materials">
+            <h2>Materials Management</h2>
+            
+            <div class="section">
+                <h3>Create Material (POST /api/materials)</h3>
+                <form id="createMaterialForm">
+                    <input type="text" name="name" placeholder="Name *" required>
+                    <select name="unit" required>
+                        <option value="">Select Unit *</option>
+                        <option value="ml">ml</option>
+                        <option value="g">g</option>
+                        <option value="pcs">pcs</option>
+                    </select>
+                    <input type="number" name="stockOnHand" placeholder="Stock on Hand *" required min="0">
+                    <button type="submit">Create Material</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Get All Materials (GET /api/materials)</h3>
+                <button onclick="getAllMaterials()">Get All Materials</button>
+            </div>
+
+            <div class="section">
+                <h3>Get Material by ID (GET /api/materials/:id)</h3>
+                <input type="text" id="getMaterialId" placeholder="Material ID">
+                <button onclick="getMaterialById()">Get Material</button>
+            </div>
+
+            <div class="section">
+                <h3>Update Material (PUT /api/materials/:id)</h3>
+                <form id="updateMaterialForm">
+                    <input type="text" name="id" placeholder="Material ID *" required>
+                    <input type="text" name="name" placeholder="New Name">
+                    <select name="unit">
+                        <option value="">Keep Unit</option>
+                        <option value="ml">ml</option>
+                        <option value="g">g</option>
+                        <option value="pcs">pcs</option>
+                    </select>
+                    <input type="number" name="stockOnHand" placeholder="New Stock" min="0">
+                    <button type="submit">Update Material</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Delete Material (DELETE /api/materials/:id)</h3>
+                <input type="text" id="deleteMaterialId" placeholder="Material ID">
+                <button onclick="deleteMaterial()">Delete Material</button>
+            </div>
+        </div>
+
+        <!-- Procedures Tab -->
+        <div class="tab-content" id="procedures">
+            <h2>Procedures Management</h2>
+            
+            <div class="section">
+                <h3>Create Procedure (POST /api/procedures)</h3>
+                <form id="createProcedureForm">
+                    <input type="text" name="name" placeholder="Name *" required>
+                    <input type="number" name="durationMin" placeholder="Duration (min) *" required min="1">
+                    <input type="number" name="price" placeholder="Price *" required min="0" step="0.01">
+                    <button type="submit">Create Procedure</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Get All Procedures (GET /api/procedures)</h3>
+                <button onclick="getAllProcedures()">Get All Procedures</button>
+            </div>
+
+            <div class="section">
+                <h3>Get Procedure by ID (GET /api/procedures/:id)</h3>
+                <input type="text" id="getProcedureId" placeholder="Procedure ID">
+                <button onclick="getProcedureById()">Get Procedure</button>
+            </div>
+
+            <div class="section">
+                <h3>Update Procedure (PUT /api/procedures/:id)</h3>
+                <form id="updateProcedureForm">
+                    <input type="text" name="id" placeholder="Procedure ID *" required>
+                    <input type="text" name="name" placeholder="New Name">
+                    <input type="number" name="durationMin" placeholder="New Duration (min)" min="1">
+                    <input type="number" name="price" placeholder="New Price" min="0" step="0.01">
+                    <button type="submit">Update Procedure</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Delete Procedure (DELETE /api/procedures/:id)</h3>
+                <input type="text" id="deleteProcedureId" placeholder="Procedure ID">
+                <button onclick="deleteProcedure()">Delete Procedure</button>
+            </div>
+
+            <div class="section">
+                <h3>Update Procedure BOM (POST /api/procedures/:id/bom)</h3>
+                <input type="text" id="bomProcedureId" placeholder="Procedure ID">
+                <textarea id="bomData" placeholder='[{"materialId": "...", "qtyPerProcedure": 5}]'></textarea>
+                <button onclick="updateProcedureBOM()">Update BOM</button>
+            </div>
+        </div>
+
+        <!-- Bookings Tab -->
+        <div class="tab-content" id="bookings">
+            <h2>Bookings Management</h2>
+            
+            <div class="section">
+                <h3>Create Booking (POST /api/bookings)</h3>
+                <form id="createBookingForm">
+                    <input type="text" name="clientId" placeholder="Client ID *" required>
+                    <input type="text" name="providerName" placeholder="Provider Name *" required>
+                    <input type="text" name="procedureId" placeholder="Procedure ID *" required>
+                    <input type="datetime-local" name="startsAt" required>
+                    <input type="datetime-local" name="endsAt" required>
+                    <select name="status" required>
+                        <option value="">Select Status *</option>
+                        <option value="held">Held</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="fulfilled">Fulfilled</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <select name="paymentType" required>
+                        <option value="">Select Payment *</option>
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="deposit">Deposit</option>
+                    </select>
+                    <button type="submit">Create Booking</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Get All Bookings (GET /api/bookings)</h3>
+                <button onclick="getAllBookings()">Get All Bookings</button>
+            </div>
+
+            <div class="section">
+                <h3>Get Booking by ID (GET /api/bookings/:id)</h3>
+                <input type="text" id="getBookingId" placeholder="Booking ID">
+                <button onclick="getBookingById()">Get Booking</button>
+            </div>
+
+            <div class="section">
+                <h3>Update Booking (PUT /api/bookings/:id)</h3>
+                <form id="updateBookingForm">
+                    <input type="text" name="id" placeholder="Booking ID *" required>
+                    <input type="text" name="providerName" placeholder="New Provider Name">
+                    <select name="status">
+                        <option value="">Keep Status</option>
+                        <option value="held">Held</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="fulfilled">Fulfilled</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <button type="submit">Update Booking</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Delete Booking (DELETE /api/bookings/:id)</h3>
+                <input type="text" id="deleteBookingId" placeholder="Booking ID">
+                <button onclick="deleteBooking()">Delete Booking</button>
+            </div>
+
+            <div class="section">
+                <h3>Update Booking Status (PATCH /api/bookings/:id/status/:newStatus)</h3>
+                <input type="text" id="statusBookingId" placeholder="Booking ID">
+                <select id="newStatus">
+                    <option value="held">Held</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="fulfilled">Fulfilled</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <button onclick="updateBookingStatus()">Update Status</button>
+            </div>
+        </div>
+
+        <div class="response-section">
+            <h3>Response</h3>
+            <pre id="response"></pre>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
