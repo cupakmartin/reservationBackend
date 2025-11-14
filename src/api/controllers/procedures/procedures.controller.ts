@@ -2,9 +2,45 @@ import { Request, Response, NextFunction } from 'express'
 import { Procedure } from '../../../database/models/procedure.model'
 import mongoose from 'mongoose'
 
-export const getAllProcedures = async (_req: Request, res: Response, next: NextFunction) => {
+interface QueryFilter {
+    name?: { $regex: string; $options: string }
+    durationMin?: { $gte: number }
+    price?: { $gte: number }
+    createdAt?: { $gte?: Date; $lte?: Date }
+}
+
+const buildProcedureFilter = (query: any): QueryFilter => {
+    const filter: QueryFilter = {}
+    
+    if (query.name) {
+        filter.name = { $regex: query.name, $options: 'i' }
+    }
+    
+    if (query.durationMin) {
+        filter.durationMin = { $gte: parseFloat(query.durationMin) }
+    }
+    
+    if (query.price) {
+        filter.price = { $gte: parseFloat(query.price) }
+    }
+    
+    if (query.dateFrom || query.dateTo) {
+        filter.createdAt = {}
+        if (query.dateFrom) {
+            filter.createdAt.$gte = new Date(query.dateFrom)
+        }
+        if (query.dateTo) {
+            filter.createdAt.$lte = new Date(query.dateTo)
+        }
+    }
+    
+    return filter
+}
+
+export const getAllProcedures = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const procedures = await Procedure.find().sort({ name: 1 })
+        const filter = buildProcedureFilter(req.query)
+        const procedures = await Procedure.find(filter).sort({ name: 1 })
         res.json(procedures)
     } catch (error) {
         next(error)
@@ -31,8 +67,8 @@ export const getProcedureById = async (req: Request, res: Response, next: NextFu
 
 export const createProcedure = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { name, durationMin, price } = req.body
-        const procedure = await Procedure.create({ name, durationMin, price })
+        const { name, description, durationMin, price } = req.body
+        const procedure = await Procedure.create({ name, description, durationMin, price })
         res.status(201).json(procedure)
     } catch (error) {
         next(error)

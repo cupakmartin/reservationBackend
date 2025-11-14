@@ -2,9 +2,45 @@ import { Request, Response, NextFunction } from 'express'
 import { Material } from '../../../database/models/material.model'
 import mongoose from 'mongoose'
 
-export const getAllMaterials = async (_req: Request, res: Response, next: NextFunction) => {
+interface QueryFilter {
+    name?: { $regex: string; $options: string }
+    unit?: string
+    stockOnHand?: { $gte: number }
+    createdAt?: { $gte?: Date; $lte?: Date }
+}
+
+const buildMaterialFilter = (query: any): QueryFilter => {
+    const filter: QueryFilter = {}
+    
+    if (query.name) {
+        filter.name = { $regex: query.name, $options: 'i' }
+    }
+    
+    if (query.unit) {
+        filter.unit = query.unit
+    }
+    
+    if (query.stockOnHand) {
+        filter.stockOnHand = { $gte: parseFloat(query.stockOnHand) }
+    }
+    
+    if (query.dateFrom || query.dateTo) {
+        filter.createdAt = {}
+        if (query.dateFrom) {
+            filter.createdAt.$gte = new Date(query.dateFrom)
+        }
+        if (query.dateTo) {
+            filter.createdAt.$lte = new Date(query.dateTo)
+        }
+    }
+    
+    return filter
+}
+
+export const getAllMaterials = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const materials = await Material.find().sort({ name: 1 })
+        const filter = buildMaterialFilter(req.query)
+        const materials = await Material.find(filter).sort({ name: 1 })
         res.json(materials)
     } catch (error) {
         next(error)

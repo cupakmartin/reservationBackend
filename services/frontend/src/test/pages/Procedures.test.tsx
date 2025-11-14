@@ -79,8 +79,10 @@ describe('Procedures Component', () => {
     const nameInput = screen.getByLabelText(/name/i)
     const priceInput = screen.getByLabelText(/price/i)
     const durationInput = screen.getByLabelText(/duration/i)
+    const descriptionInput = screen.getByLabelText(/description/i)
 
     await user.type(nameInput, 'Manicure')
+    await user.type(descriptionInput, 'Professional nail care service')
     await user.type(priceInput, '35.50')
     await user.type(durationInput, '45')
 
@@ -91,6 +93,7 @@ describe('Procedures Component', () => {
       // Verify the request was sent with correct data types
       expect(capturedRequest).toBeDefined()
       expect(capturedRequest.name).toBe('Manicure')
+      expect(capturedRequest.description).toBe('Professional nail care service')
       expect(capturedRequest.price).toBe(35.50) // Should be a number, not string
       expect(typeof capturedRequest.price).toBe('number')
       expect(capturedRequest.durationMin).toBe(45) // Should be a number, not string
@@ -137,21 +140,15 @@ describe('Procedures Component', () => {
       expect(screen.getByText('Haircut')).toBeInTheDocument()
     })
 
-    // Click edit button
-    const editButtons = screen.getAllByRole('button', { hidden: true })
-    const editButton = editButtons.find(btn => 
-      btn.querySelector('svg')?.classList.toString().includes('lucide')
-    )
-    
-    if (editButton) {
-      await user.click(editButton)
+    // Click edit button using aria-label
+    const editButton = screen.getByLabelText('Edit Haircut')
+    await user.click(editButton)
 
-      await waitFor(() => {
-        expect(screen.getByText('Edit Procedure')).toBeInTheDocument()
-        // Form should be pre-filled with existing data
-        expect(screen.getByDisplayValue('Haircut')).toBeInTheDocument()
-      })
-    }
+    await waitFor(() => {
+      expect(screen.getByText('Edit Procedure')).toBeInTheDocument()
+      // Form should be pre-filled with existing data
+      expect(screen.getByDisplayValue('Haircut')).toBeInTheDocument()
+    })
   })
 
   it('successfully updates an existing procedure', async () => {
@@ -178,38 +175,41 @@ describe('Procedures Component', () => {
       expect(screen.getByText('Haircut')).toBeInTheDocument()
     })
 
-    const editButtons = screen.getAllByRole('button', { hidden: true })
-    const editButton = editButtons.find(btn => 
-      btn.querySelector('svg')?.classList.toString().includes('lucide')
-    )
-    
-    if (editButton) {
-      await user.click(editButton)
+    // Click edit button using aria-label
+    const editButton = screen.getByLabelText('Edit Haircut')
+    await user.click(editButton)
 
-      await waitFor(() => {
-        expect(screen.getByText('Edit Procedure')).toBeInTheDocument()
-      })
+    await waitFor(() => {
+      expect(screen.getByText('Edit Procedure')).toBeInTheDocument()
+    })
 
-      const priceInput = screen.getByLabelText(/price/i)
-      await user.clear(priceInput)
-      await user.type(priceInput, '75.00')
+    const priceInput = screen.getByLabelText(/price/i)
+    await user.clear(priceInput)
+    await user.type(priceInput, '75.00')
 
-      const updateButton = screen.getByRole('button', { name: /update/i })
-      await user.click(updateButton)
+    const updateButton = screen.getByRole('button', { name: /update/i })
+    await user.click(updateButton)
 
-      await waitFor(() => {
-        expect(capturedRequest).toBeDefined()
-        expect(capturedRequest.price).toBe(75)
-        expect(typeof capturedRequest.price).toBe('number')
-      })
-    }
+    await waitFor(() => {
+      expect(capturedRequest).toBeDefined()
+      expect(capturedRequest.price).toBe(75)
+      expect(typeof capturedRequest.price).toBe('number')
+    })
   })
 
   it('successfully deletes a procedure', async () => {
     const user = userEvent.setup()
+    let deleteWasCalled = false
     
     // Mock window.confirm
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    server.use(
+      http.delete('http://localhost:4000/api/procedures/:id', () => {
+        deleteWasCalled = true
+        return HttpResponse.json({ ok: true, message: 'Procedure deleted' })
+      })
+    )
 
     render(
       <BrowserRouter>
@@ -221,18 +221,14 @@ describe('Procedures Component', () => {
       expect(screen.getByText('Haircut')).toBeInTheDocument()
     })
 
-    const deleteButtons = screen.getAllByRole('button', { hidden: true })
-    const deleteButton = deleteButtons.find(btn => 
-      btn.querySelector('svg')?.classList.toString().includes('lucide')
-    )
-    
-    if (deleteButton) {
-      await user.click(deleteButton)
+    // Click delete button using aria-label
+    const deleteButton = screen.getByLabelText('Delete Haircut')
+    await user.click(deleteButton)
 
-      await waitFor(() => {
-        expect(confirmSpy).toHaveBeenCalled()
-      })
-    }
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalled()
+      expect(deleteWasCalled).toBe(true)
+    })
     
     confirmSpy.mockRestore()
   })

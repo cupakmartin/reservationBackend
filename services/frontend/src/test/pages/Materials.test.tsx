@@ -136,21 +136,15 @@ describe('Materials Component', () => {
       expect(screen.getByText('Shampoo')).toBeInTheDocument()
     })
 
-    // Click edit button (first one in the list)
-    const editButtons = screen.getAllByRole('button', { hidden: true })
-    const editButton = editButtons.find(btn => 
-      btn.querySelector('svg')?.classList.toString().includes('lucide')
-    )
-    
-    if (editButton) {
-      await user.click(editButton)
+    // Click edit button using aria-label
+    const editButton = screen.getByLabelText('Edit Shampoo')
+    await user.click(editButton)
 
-      await waitFor(() => {
-        expect(screen.getByText('Edit Material')).toBeInTheDocument()
-        // Form should be pre-filled with existing data
-        expect(screen.getByDisplayValue('Shampoo')).toBeInTheDocument()
-      })
-    }
+    await waitFor(() => {
+      expect(screen.getByText('Edit Material')).toBeInTheDocument()
+      // Form should be pre-filled with existing data
+      expect(screen.getByDisplayValue('Shampoo')).toBeInTheDocument()
+    })
   })
 
   it('successfully updates an existing material', async () => {
@@ -177,38 +171,41 @@ describe('Materials Component', () => {
       expect(screen.getByText('Shampoo')).toBeInTheDocument()
     })
 
-    const editButtons = screen.getAllByRole('button', { hidden: true })
-    const editButton = editButtons.find(btn => 
-      btn.querySelector('svg')?.classList.toString().includes('lucide')
-    )
-    
-    if (editButton) {
-      await user.click(editButton)
+    // Click edit button using aria-label
+    const editButton = screen.getByLabelText('Edit Shampoo')
+    await user.click(editButton)
 
-      await waitFor(() => {
-        expect(screen.getByText('Edit Material')).toBeInTheDocument()
-      })
+    await waitFor(() => {
+      expect(screen.getByText('Edit Material')).toBeInTheDocument()
+    })
 
-      const stockInput = screen.getByLabelText(/stock on hand/i)
-      await user.clear(stockInput)
-      await user.type(stockInput, '150')
+    const stockInput = screen.getByLabelText(/stock on hand/i)
+    await user.clear(stockInput)
+    await user.type(stockInput, '150')
 
-      const updateButton = screen.getByRole('button', { name: /update/i })
-      await user.click(updateButton)
+    const updateButton = screen.getByRole('button', { name: /update/i })
+    await user.click(updateButton)
 
-      await waitFor(() => {
-        expect(capturedRequest).toBeDefined()
-        expect(capturedRequest.stockOnHand).toBe(150)
-        expect(typeof capturedRequest.stockOnHand).toBe('number')
-      })
-    }
+    await waitFor(() => {
+      expect(capturedRequest).toBeDefined()
+      expect(capturedRequest.stockOnHand).toBe(150)
+      expect(typeof capturedRequest.stockOnHand).toBe('number')
+    })
   })
 
   it('successfully deletes a material', async () => {
     const user = userEvent.setup()
+    let deleteWasCalled = false
     
     // Mock window.confirm
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    server.use(
+      http.delete('http://localhost:4000/api/materials/:id', () => {
+        deleteWasCalled = true
+        return HttpResponse.json({ ok: true, message: 'Material deleted' })
+      })
+    )
 
     render(
       <BrowserRouter>
@@ -220,20 +217,13 @@ describe('Materials Component', () => {
       expect(screen.getByText('Shampoo')).toBeInTheDocument()
     })
 
-    const deleteButtons = screen.getAllByRole('button', { hidden: true })
-    const deleteButton = deleteButtons.find(btn => 
-      btn.querySelector('svg')?.classList.toString().includes('lucide')
-    )
-    
-    if (deleteButton) {
-      await user.click(deleteButton)
+    // Click delete button using aria-label
+    const deleteButton = screen.getByLabelText('Delete Shampoo')
+    await user.click(deleteButton)
 
-      await waitFor(() => {
-        expect(confirmSpy).toHaveBeenCalled()
-      })
-    }
-    
-    confirmSpy.mockRestore()
+    await waitFor(() => {
+      expect(deleteWasCalled).toBe(true)
+    })
   })
 
   it('handles API errors gracefully', async () => {

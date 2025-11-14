@@ -3,9 +3,45 @@ import { Client } from '../../../database/models/client.model'
 import { AuthRequest } from '../../../middleware/auth'
 import mongoose from 'mongoose'
 
-export const getAllClients = async (_req: AuthRequest, res: Response, next: NextFunction) => {
+interface QueryFilter {
+    name?: { $regex: string; $options: string }
+    role?: string
+    loyaltyPoints?: { $gte: number }
+    createdAt?: { $gte?: Date; $lte?: Date }
+}
+
+const buildClientFilter = (query: any): QueryFilter => {
+    const filter: QueryFilter = {}
+    
+    if (query.name) {
+        filter.name = { $regex: query.name, $options: 'i' }
+    }
+    
+    if (query.role) {
+        filter.role = query.role
+    }
+    
+    if (query.loyaltyPoints) {
+        filter.loyaltyPoints = { $gte: parseFloat(query.loyaltyPoints) }
+    }
+    
+    if (query.dateFrom || query.dateTo) {
+        filter.createdAt = {}
+        if (query.dateFrom) {
+            filter.createdAt.$gte = new Date(query.dateFrom)
+        }
+        if (query.dateTo) {
+            filter.createdAt.$lte = new Date(query.dateTo)
+        }
+    }
+    
+    return filter
+}
+
+export const getAllClients = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        const clients = await Client.find().sort({ name: 1 })
+        const filter = buildClientFilter(req.query)
+        const clients = await Client.find(filter).sort({ name: 1 })
         res.json(clients)
     } catch (error) {
         next(error)

@@ -7,22 +7,15 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
-    environment: 'happy-dom',
+    environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: true,
-    environmentOptions: {
-      happyDOM: {
-        settings: {
-          disableJavaScriptFileLoading: true,
-          disableJavaScriptEvaluation: false,
-          disableCSSFileLoading: true,
-          enableFileSystemHttpRequests: false,
-          navigator: {
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-        },
-      },
-    },
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true
+      }
+    }
   },
   resolve: {
     alias: {

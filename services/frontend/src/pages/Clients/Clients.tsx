@@ -7,7 +7,7 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Modal from '../../components/ui/Modal'
 import { toast } from '../../components/ui/Toast'
-import { Plus, Edit, Trash2, Mail, Phone, Award } from 'lucide-react'
+import { Plus, Edit, Trash2, Mail, Phone, Award, Filter, X } from 'lucide-react'
 
 interface Client {
   _id: string
@@ -22,8 +22,17 @@ export default function Clients() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  const [filters, setFilters] = useState({
+    name: '',
+    role: '',
+    loyaltyPoints: '',
+    dateFrom: '',
+    dateTo: '',
+  })
 
   const [formData, setFormData] = useState({
     name: '',
@@ -35,7 +44,15 @@ export default function Clients() {
 
   const fetchClients = async () => {
     try {
-      const { data } = await api.get('/clients')
+      const params = new URLSearchParams()
+      if (filters.name) params.append('name', filters.name)
+      if (filters.role) params.append('role', filters.role)
+      if (filters.loyaltyPoints) params.append('loyaltyPoints', filters.loyaltyPoints)
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
+      if (filters.dateTo) params.append('dateTo', filters.dateTo)
+      
+      const queryString = params.toString()
+      const { data } = await api.get(`/clients${queryString ? `?${queryString}` : ''}`)
       setClients(data)
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string } } }
@@ -47,7 +64,7 @@ export default function Clients() {
 
   useEffect(() => {
     fetchClients()
-  }, [])
+  }, [filters])
 
   const handleOpenModal = (client?: Client) => {
     if (client) {
@@ -128,6 +145,18 @@ export default function Clients() {
     }
   }
 
+  const clearFilters = () => {
+    setFilters({
+      name: '',
+      role: '',
+      loyaltyPoints: '',
+      dateFrom: '',
+      dateTo: '',
+    })
+  }
+
+  const hasActiveFilters = Object.values(filters).some(val => val !== '')
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-purple-100 text-purple-800 border-purple-300'
@@ -148,11 +177,73 @@ export default function Clients() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Client
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="secondary" 
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Filters {hasActiveFilters && `(${Object.values(filters).filter(v => v).length})`}
+          </Button>
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Client
+          </Button>
+        </div>
       </div>
+
+      {showFilters && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <Input
+                label="Name"
+                placeholder="Search by name"
+                value={filters.name}
+                onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+              />
+              <Select
+                label="Role"
+                value={filters.role}
+                onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+                options={[
+                  { value: '', label: 'All Roles' },
+                  { value: 'client', label: 'Client' },
+                  { value: 'worker', label: 'Worker' },
+                  { value: 'admin', label: 'Admin' },
+                ]}
+              />
+              <Input
+                label="Min Loyalty Points"
+                type="number"
+                placeholder="Min points"
+                value={filters.loyaltyPoints}
+                onChange={(e) => setFilters({ ...filters, loyaltyPoints: e.target.value })}
+              />
+              <Input
+                label="Date From"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              />
+              <Input
+                label="Date To"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+            </div>
+            {hasActiveFilters && (
+              <div className="mt-4 flex justify-end">
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -198,12 +289,14 @@ export default function Clients() {
                       <button
                         onClick={() => handleOpenModal(client)}
                         className="text-blue-600 hover:text-blue-700"
+                        aria-label={`Edit ${client.name}`}
                       >
                         <Edit className="h-5 w-5" />
                       </button>
                       <button
                         onClick={() => handleDelete(client._id)}
                         className="text-red-600 hover:text-red-700"
+                        aria-label={`Delete ${client.name}`}
                       >
                         <Trash2 className="h-5 w-5" />
                       </button>

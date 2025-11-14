@@ -7,6 +7,7 @@ const ProcedureMaterialSchema = new Schema({
 
 const ProcedureSchema = new Schema({
     name: { type: String, required: true },
+    description: { type: String, required: false },
     durationMin: { type: Number, required: true },
     price: { type: Number, required: true },
     bom: { type: [ProcedureMaterialSchema], default: [] } // list of materials used

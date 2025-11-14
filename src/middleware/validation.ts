@@ -34,12 +34,14 @@ export const updateMaterialSchema = z.object({
 // Procedure Schema
 export const createProcedureSchema = z.object({
     name: z.string().min(1, 'Name is required'),
+    description: z.string().optional(),
     durationMin: z.number().positive('Duration must be positive'),
     price: z.number().positive('Price must be positive')
 })
 
 export const updateProcedureSchema = z.object({
     name: z.string().min(1, 'Name is required').optional(),
+    description: z.string().optional(),
     durationMin: z.number().positive('Duration must be positive').optional(),
     price: z.number().positive('Price must be positive').optional()
 })

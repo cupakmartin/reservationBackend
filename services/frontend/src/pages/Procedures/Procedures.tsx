@@ -6,11 +6,12 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import { toast } from '../../components/ui/Toast'
-import { Plus, Edit, Trash2, Clock, DollarSign } from 'lucide-react'
+import { Plus, Edit, Trash2, Clock, DollarSign, Filter, X } from 'lucide-react'
 
 interface Procedure {
   _id: string
   name: string
+  description?: string
   durationMin: number
   price: number
 }
@@ -19,18 +20,36 @@ export default function Procedures() {
   const [procedures, setProcedures] = useState<Procedure[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [editingProcedure, setEditingProcedure] = useState<Procedure | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const [filters, setFilters] = useState({
+    name: '',
+    durationMin: '',
+    price: '',
+    dateFrom: '',
+    dateTo: '',
+  })
+
   const [formData, setFormData] = useState({
     name: '',
+    description: '',
     price: '',
     duration: '',
   })
 
   const fetchProcedures = async () => {
     try {
-      const { data } = await api.get('/procedures')
+      const params = new URLSearchParams()
+      if (filters.name) params.append('name', filters.name)
+      if (filters.durationMin) params.append('durationMin', filters.durationMin)
+      if (filters.price) params.append('price', filters.price)
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
+      if (filters.dateTo) params.append('dateTo', filters.dateTo)
+      
+      const queryString = params.toString()
+      const { data } = await api.get(`/procedures${queryString ? `?${queryString}` : ''}`)
       setProcedures(data)
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string } } }
@@ -42,19 +61,20 @@ export default function Procedures() {
 
   useEffect(() => {
     fetchProcedures()
-  }, [])
+  }, [filters])
 
   const handleOpenModal = (procedure?: Procedure) => {
     if (procedure) {
       setEditingProcedure(procedure)
       setFormData({
         name: procedure.name,
+        description: procedure.description || '',
         price: procedure.price.toString(),
         duration: procedure.durationMin.toString(),
       })
     } else {
       setEditingProcedure(null)
-      setFormData({ name: '', price: '', duration: '' })
+      setFormData({ name: '', description: '', price: '', duration: '' })
     }
     setShowModal(true)
   }
@@ -62,7 +82,7 @@ export default function Procedures() {
   const handleCloseModal = () => {
     setShowModal(false)
     setEditingProcedure(null)
-    setFormData({ name: '', price: '', duration: '' })
+    setFormData({ name: '', description: '', price: '', duration: '' })
   }
 
   const handleSubmit = async () => {
@@ -76,6 +96,7 @@ export default function Procedures() {
     try {
       const data = {
         name: formData.name,
+        description: formData.description || undefined,
         durationMin: parseInt(formData.duration),
         price: parseFloat(formData.price),
       }
@@ -111,6 +132,18 @@ export default function Procedures() {
     }
   }
 
+  const clearFilters = () => {
+    setFilters({
+      name: '',
+      durationMin: '',
+      price: '',
+      dateFrom: '',
+      dateTo: '',
+    })
+  }
+
+  const hasActiveFilters = Object.values(filters).some(val => val !== '')
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -123,11 +156,70 @@ export default function Procedures() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Procedures</h1>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Procedure
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="secondary" 
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Filters {hasActiveFilters && `(${Object.values(filters).filter(v => v).length})`}
+          </Button>
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Procedure
+          </Button>
+        </div>
       </div>
+
+      {showFilters && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <Input
+                label="Name"
+                placeholder="Search by name"
+                value={filters.name}
+                onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+              />
+              <Input
+                label="Min Duration (min)"
+                type="number"
+                placeholder="Min duration"
+                value={filters.durationMin}
+                onChange={(e) => setFilters({ ...filters, durationMin: e.target.value })}
+              />
+              <Input
+                label="Min Price ($)"
+                type="number"
+                step="0.01"
+                placeholder="Min price"
+                value={filters.price}
+                onChange={(e) => setFilters({ ...filters, price: e.target.value })}
+              />
+              <Input
+                label="Date From"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              />
+              <Input
+                label="Date To"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+            </div>
+            {hasActiveFilters && (
+              <div className="mt-4 flex justify-end">
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -148,12 +240,14 @@ export default function Procedures() {
                       <button
                         onClick={() => handleOpenModal(procedure)}
                         className="text-blue-600 hover:text-blue-700"
+                        aria-label={`Edit ${procedure.name}`}
                       >
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(procedure._id)}
                         className="text-red-600 hover:text-red-700"
+                        aria-label={`Delete ${procedure.name}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -190,6 +284,20 @@ export default function Procedures() {
               placeholder="Haircut, Manicure, etc."
               required
             />
+
+            <div>
+              <label htmlFor="description-input" className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                id="description-input"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                rows={3}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Optional description of the procedure"
+              />
+            </div>
 
             <Input
               label="Price ($)"

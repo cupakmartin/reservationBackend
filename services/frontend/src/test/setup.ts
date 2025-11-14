@@ -29,45 +29,33 @@ vi.mock('../store/authStore', () => {
   }
 })
 
-// Setup browser globals that happy-dom might be missing
-if (typeof globalThis.navigator === 'undefined') {
-  Object.defineProperty(globalThis, 'navigator', {
-    value: {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      clipboard: {
-        writeText: vi.fn(),
-        readText: vi.fn(),
-      },
-    },
+// Mock window.matchMedia (check if window exists first)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
     writable: true,
+    value: vi.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+
+  // Mock window.confirm and window.alert
+  Object.defineProperty(window, 'confirm', {
+    writable: true,
+    value: vi.fn(() => true),
+  })
+
+  Object.defineProperty(window, 'alert', {
+    writable: true,
+    value: vi.fn(),
   })
 }
-
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
-
-// Mock window.confirm and window.alert
-Object.defineProperty(window, 'confirm', {
-  writable: true,
-  value: vi.fn(() => true),
-})
-
-Object.defineProperty(window, 'alert', {
-  writable: true,
-  value: vi.fn(),
-})
 
 // Mock handlers for API calls
 export const handlers = [
@@ -170,6 +158,26 @@ export const handlers = [
         name: 'John Doe',
         email: 'john@example.com',
         phone: '+1234567890',
+      },
+    ])
+  }),
+
+  // Bookings endpoints
+  http.get('http://localhost:4000/api/bookings', () => {
+    return HttpResponse.json([
+      {
+        _id: '1',
+        clientId: '1',
+        procedureId: '1',
+        status: 'confirmed',
+        scheduledAt: new Date().toISOString(),
+      },
+      {
+        _id: '2',
+        clientId: '2',
+        procedureId: '1',
+        status: 'pending',
+        scheduledAt: new Date().toISOString(),
       },
     ])
   }),

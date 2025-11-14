@@ -50,7 +50,10 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
   const [formData, setFormData] = useState({
     clientId: user?.role === 'client' ? user.id : '',
     procedureId: '',
+    providerName: '',
     time: '',
+    status: 'held',
+    paymentType: 'cash',
   })
 
   useEffect(() => {
@@ -77,19 +80,38 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
   }, [date, user?.role])
 
   const handleSubmit = async () => {
-    if (!formData.clientId || !formData.procedureId || !formData.time) {
-      toast('error', 'Please fill in all fields')
+    if (!formData.clientId || !formData.procedureId || !formData.time || !formData.providerName) {
+      toast('error', 'Please fill in all required fields')
       return
     }
 
     setSubmitting(true)
 
     try {
+      // Find the selected procedure to get its duration
+      const selectedProcedure = procedures.find(p => p._id === formData.procedureId)
+      
+      if (!selectedProcedure) {
+        toast('error', 'Selected procedure not found')
+        setSubmitting(false)
+        return
+      }
+
+      // Create startsAt datetime
+      const dateStr = format(date, 'yyyy-MM-dd')
+      const startsAt = new Date(`${dateStr}T${formData.time}:00`)
+      
+      // Calculate endsAt based on procedure duration
+      const endsAt = new Date(startsAt.getTime() + selectedProcedure.duration * 60000)
+
       await api.post('/bookings', {
         clientId: formData.clientId,
         procedureId: formData.procedureId,
-        date: format(date, 'yyyy-MM-dd'),
-        time: formData.time,
+        providerName: formData.providerName,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        status: formData.status,
+        paymentType: formData.paymentType,
       })
 
       toast('success', 'Booking created successfully!')
@@ -253,10 +275,43 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
           />
 
           <Input
+            label="Provider Name"
+            value={formData.providerName}
+            onChange={(e) => setFormData({ ...formData, providerName: e.target.value })}
+            placeholder="Name of the service provider"
+            required
+          />
+
+          <Input
             label="Time"
             type="time"
             value={formData.time}
             onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+            required
+          />
+
+          <Select
+            label="Status"
+            value={formData.status}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+            options={[
+              { value: 'held', label: 'Held' },
+              { value: 'confirmed', label: 'Confirmed' },
+              { value: 'fulfilled', label: 'Fulfilled' },
+              { value: 'cancelled', label: 'Cancelled' },
+            ]}
+            required
+          />
+
+          <Select
+            label="Payment Type"
+            value={formData.paymentType}
+            onChange={(e) => setFormData({ ...formData, paymentType: e.target.value })}
+            options={[
+              { value: 'cash', label: 'Cash' },
+              { value: 'card', label: 'Card' },
+              { value: 'deposit', label: 'Deposit' },
+            ]}
             required
           />
 
