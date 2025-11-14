@@ -86,7 +86,7 @@ export default function Login() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => quickLogin('admin@test.com', 'password123')}
+                onClick={() => quickLogin('admin@test.com', '123456')}
               >
                 Admin
               </Button>
@@ -94,7 +94,7 @@ export default function Login() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => quickLogin('worker@test.com', 'password123')}
+                onClick={() => quickLogin('test@worker.com', '123456')}
               >
                 Worker
               </Button>
@@ -102,7 +102,7 @@ export default function Login() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => quickLogin('john@test.com', 'password123')}
+                onClick={() => quickLogin('test@client.com', '123456')}
               >
                 Client
               </Button>

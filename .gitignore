@@ -16,5 +16,8 @@ npm-debug.log*
 .idea/
 .vscode/
 
+# Dev notes
+*.md
+
 # Debug/HTTP requests output
 debug-requests/*.response.json

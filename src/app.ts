@@ -25,8 +25,8 @@ export function createApp() {
 
     registerRoutes(app)
 
-    // Serve static files from public directory (frontend UI)
-    app.use(express.static(path.join(__dirname, '../public')))
+    // Serve dev GUI at /dev (for developers)
+    app.use('/dev', express.static(path.join(__dirname, '../public')))
 
     app.use((_req, _res, next) => next(createError(404, 'Not found')))
     app.use(errorMiddleware)

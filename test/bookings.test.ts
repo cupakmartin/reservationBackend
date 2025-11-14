@@ -10,10 +10,18 @@ import { Material } from '../src/database/models/material.model'
 const app = createApp()
 useSeeders()
 
-// Mock mailing service
-vi.mock('../src/services/mailing.service', () => ({
-    sendEmail: vi.fn()
-}))
+// Mock fetch for mailing service
+const mockFetch = vi.fn()
+global.fetch = mockFetch as any
+
+beforeEach(() => {
+    // Reset fetch mock and setup default successful response
+    mockFetch.mockReset()
+    mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ messageId: 'test-message-id', previewUrl: 'https://test.ethereal.email' })
+    })
+})
 
 // Mock WebSocket
 vi.mock('../src/websocket', () => ({

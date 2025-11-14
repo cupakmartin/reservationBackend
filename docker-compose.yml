@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongo-db:
+    image: mongo:6
+    container_name: salon-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - salon-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Main Data API
+  data-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: salon-data-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - MONGO_URI=mongodb://mongo-db:27017/salon
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-your-super-secret-refresh-key-change-in-production}
+      - MAILING_SERVICE_URL=http://mailing-service:4001
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+      mailing-service:
+        condition: service_started
+    networks:
+      - salon-network
+    volumes:
+      - ./public:/app/public
+
+  # Mailing Service
+  mailing-service:
+    build:
+      context: ./services/mailing-service
+      dockerfile: Dockerfile
+    container_name: salon-mailing-service
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=production
+      - PORT=4001
+      - SMTP_HOST=${SMTP_HOST:-smtp.ethereal.email}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+    networks:
+      - salon-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    container_name: salon-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - data-api
+    networks:
+      - salon-network
+
+networks:
+  salon-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
