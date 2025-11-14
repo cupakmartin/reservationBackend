@@ -8,7 +8,7 @@ import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
-import { Calendar, Clock, User, Briefcase, DollarSign, Edit, Trash2 } from 'lucide-react'
+import { Calendar, Clock, User, Briefcase, DollarSign, Trash2 } from 'lucide-react'
 
 interface Booking {
   _id: string

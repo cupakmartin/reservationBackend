@@ -42,7 +42,8 @@ export default function Login() {
     setEmail(email)
     setPassword(password)
     setTimeout(() => {
-      document.getElementById('login-form')?.requestSubmit()
+      const form = document.getElementById('login-form') as HTMLFormElement
+      form?.requestSubmit()
     }, 100)
   }
 

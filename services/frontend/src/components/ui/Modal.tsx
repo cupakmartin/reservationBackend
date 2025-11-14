@@ -1,5 +1,5 @@
 // src/components/ui/Modal.tsx
-import { useEffect, Fragment } from 'react'
+import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
