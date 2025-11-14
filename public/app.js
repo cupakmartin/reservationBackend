@@ -1,5 +1,68 @@
 const API_BASE = '/api'
 
+// Authentication state
+let accessToken = localStorage.getItem('accessToken')
+let refreshTokenValue = localStorage.getItem('refreshToken')
+let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null')
+
+// Update UI with current auth state
+function updateAuthUI() {
+    const userInfo = document.getElementById('userInfo')
+    const logoutBtn = document.getElementById('logoutBtn')
+    
+    if (currentUser) {
+        userInfo.textContent = `Logged in as: ${currentUser.name} (${currentUser.role})`
+        logoutBtn.style.display = 'inline-block'
+    } else {
+        userInfo.textContent = 'Not logged in'
+        logoutBtn.style.display = 'none'
+    }
+}
+
+// Logout function
+function logout() {
+    accessToken = null
+    refreshTokenValue = null
+    currentUser = null
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
+    localStorage.removeItem('currentUser')
+    updateAuthUI()
+    displayResponse({ message: 'Logged out successfully' })
+}
+
+// Quick login function
+async function quickLogin(email, password) {
+    const formData = { email, password }
+    const loginForm = document.getElementById('loginForm')
+    
+    // Populate form
+    loginForm.email.value = email
+    loginForm.password.value = password
+    
+    // Submit
+    await handleLogin(formData)
+}
+
+// Refresh token function
+async function refreshToken() {
+    if (!refreshTokenValue) {
+        displayResponse({ error: 'No refresh token available. Please login first.' }, true)
+        return
+    }
+    
+    const data = await handleFetch('/api/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken: refreshTokenValue })
+    })
+    
+    if (data && data.accessToken) {
+        accessToken = data.accessToken
+        localStorage.setItem('accessToken', accessToken)
+        displayResponse({ message: 'Token refreshed successfully', user: data.user })
+    }
+}
+
 // Tab switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -23,12 +86,19 @@ function displayResponse(data, isError = false) {
 // Helper function to handle fetch errors
 async function handleFetch(url, options = {}) {
     try {
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        }
+        
+        // Add Authorization header if we have a token
+        if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`
+        }
+        
         const response = await fetch(url, {
             ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
+            headers
         })
         
         const data = await response.json()
@@ -44,6 +114,57 @@ async function handleFetch(url, options = {}) {
         displayResponse({ error: error.message }, true)
     }
 }
+
+// AUTHENTICATION API
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    const data = Object.fromEntries(formData)
+    
+    const result = await handleFetch('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+    
+    if (result && result.accessToken) {
+        accessToken = result.accessToken
+        refreshTokenValue = result.refreshToken
+        currentUser = result.user
+        localStorage.setItem('accessToken', accessToken)
+        localStorage.setItem('refreshToken', refreshTokenValue)
+        localStorage.setItem('currentUser', JSON.stringify(currentUser))
+        updateAuthUI()
+        e.target.reset()
+    }
+})
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    const data = Object.fromEntries(formData)
+    await handleLogin(data)
+    e.target.reset()
+})
+
+async function handleLogin(data) {
+    const result = await handleFetch('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+    
+    if (result && result.accessToken) {
+        accessToken = result.accessToken
+        refreshTokenValue = result.refreshToken
+        currentUser = result.user
+        localStorage.setItem('accessToken', accessToken)
+        localStorage.setItem('refreshToken', refreshTokenValue)
+        localStorage.setItem('currentUser', JSON.stringify(currentUser))
+        updateAuthUI()
+    }
+}
+
+// Initialize auth UI on page load
+updateAuthUI()
 
 // CLIENTS API
 document.getElementById('createClientForm').addEventListener('submit', async (e) => {
@@ -300,3 +421,181 @@ async function updateBookingStatus() {
         method: 'PATCH'
     })
 }
+
+async function getCalendar() {
+    const month = document.getElementById('calendarMonth').value
+    const year = document.getElementById('calendarYear').value
+    
+    if (!month || !year) return alert('Please enter both month and year')
+    
+    await handleFetch(`${API_BASE}/bookings/calendar?month=${month}&year=${year}`)
+}
+
+// WebSocket functionality
+let socket = null
+let isConnecting = false
+
+function toggleWebSocket() {
+    if (socket && socket.connected) {
+        disconnectWebSocket()
+    } else {
+        connectWebSocket()
+    }
+}
+
+function connectWebSocket() {
+    if (!accessToken) {
+        alert('Please login first to connect WebSocket')
+        return
+    }
+    
+    if (isConnecting) return
+    isConnecting = true
+    
+    updateWSStatus('🟡 Connecting...', true)
+    
+    // Load Socket.IO from CDN if not already loaded
+    if (typeof io === 'undefined') {
+        const script = document.createElement('script')
+        script.src = 'https://cdn.socket.io/4.5.4/socket.io.min.js'
+        script.onload = () => initWebSocket()
+        script.onerror = () => {
+            isConnecting = false
+            updateWSStatus('🔴 Failed to load Socket.IO', false)
+        }
+        document.head.appendChild(script)
+    } else {
+        initWebSocket()
+    }
+}
+
+function initWebSocket() {
+    try {
+        socket = io('http://localhost:4000', {
+            auth: {
+                token: accessToken
+            }
+        })
+        
+        socket.on('connect', () => {
+            isConnecting = false
+            updateWSStatus('🟢 Connected', true)
+            addWSEvent('✅ Connected to WebSocket server')
+        })
+        
+        socket.on('disconnect', () => {
+            updateWSStatus('🔴 Disconnected', false)
+            addWSEvent('❌ Disconnected from server')
+        })
+        
+        socket.on('connect_error', (error) => {
+            isConnecting = false
+            updateWSStatus('🔴 Connection error', false)
+            addWSEvent(`❌ Error: ${error.message}`)
+        })
+        
+        socket.on('bookings:updated', (data) => {
+            addWSEvent(`📅 Booking ${data.event}: ${JSON.stringify(data.data)}`)
+            displayResponse(data, false)
+        })
+        
+        socket.on('pong', () => {
+            addWSEvent('🏓 Pong received')
+        })
+        
+    } catch (error) {
+        isConnecting = false
+        updateWSStatus('🔴 Connection failed', false)
+        addWSEvent(`❌ Error: ${error.message}`)
+    }
+}
+
+function disconnectWebSocket() {
+    if (socket) {
+        socket.disconnect()
+        socket = null
+        updateWSStatus('⚪ Not connected', false)
+        addWSEvent('👋 Disconnected')
+    }
+}
+
+function updateWSStatus(text, isConnected) {
+    const indicator = document.getElementById('wsIndicator')
+    const toggle = document.getElementById('wsToggle')
+    
+    indicator.textContent = text
+    toggle.textContent = isConnected ? 'Disconnect' : 'Connect'
+}
+
+function addWSEvent(message) {
+    const eventsDiv = document.getElementById('wsEvents')
+    const timestamp = new Date().toLocaleTimeString()
+    const eventLine = document.createElement('div')
+    eventLine.textContent = `[${timestamp}] ${message}`
+    eventLine.style.marginBottom = '4px'
+    eventsDiv.appendChild(eventLine)
+    eventsDiv.scrollTop = eventsDiv.scrollHeight
+    
+    // Keep only last 50 events
+    while (eventsDiv.children.length > 50) {
+        eventsDiv.removeChild(eventsDiv.firstChild)
+    }
+}
+
+// ============================================
+// MAILING SERVICE API
+// ============================================
+
+const MAILING_SERVICE_URL = 'http://localhost:4001'
+
+async function checkMailingServiceHealth() {
+    try {
+        const response = await fetch(`${MAILING_SERVICE_URL}/health`)
+        const data = await response.json()
+        displayResponse(data)
+    } catch (error) {
+        displayResponse({ 
+            error: 'Cannot connect to Mailing Service',
+            message: 'Make sure the service is running on port 4001',
+            hint: 'cd services/mailing-service && npm start'
+        }, true)
+    }
+}
+
+document.getElementById('sendEmailForm').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    const data = {
+        to: formData.get('to'),
+        subject: formData.get('subject'),
+        html: formData.get('html')
+    }
+    
+    try {
+        const response = await fetch(`${MAILING_SERVICE_URL}/send-email`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        
+        const result = await response.json()
+        
+        if (response.ok) {
+            displayResponse({
+                ...result,
+                message: '✅ Email sent successfully!',
+                hint: 'Check the preview URL or login to Ethereal Email to view the message'
+            })
+        } else {
+            displayResponse(result, true)
+        }
+    } catch (error) {
+        displayResponse({ 
+            error: 'Cannot connect to Mailing Service',
+            message: error.message,
+            hint: 'Make sure the service is running: cd services/mailing-service && npm start'
+        }, true)
+    }
+})

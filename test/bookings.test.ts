@@ -6,14 +6,20 @@ import { Booking } from '../src/database/models/booking.model'
 import { Client } from '../src/database/models/client.model'
 import { Procedure } from '../src/database/models/procedure.model'
 import { Material } from '../src/database/models/material.model'
-import * as notificationService from '../src/services/notification.service'
 
 const app = createApp()
 useSeeders()
 
-// Mock email sending
-vi.mock('../src/services/notification.service', () => ({
+// Mock mailing service
+vi.mock('../src/services/mailing.service', () => ({
     sendEmail: vi.fn()
+}))
+
+// Mock WebSocket
+vi.mock('../src/websocket', () => ({
+    emitBookingUpdate: vi.fn(),
+    initializeWebSocket: vi.fn(),
+    getIO: vi.fn()
 }))
 
 describe('Booking API', () => {
@@ -353,6 +359,105 @@ describe('Booking API', () => {
                 .delete('/api/bookings/507f1f77bcf86cd799439011')
                 .set('Authorization', `Bearer ${adminToken}`)
             expect(res.status).toBe(404)
+        })
+    })
+
+    describe('GET /api/bookings/calendar', () => {
+        it('should return calendar data for a specific month', async () => {
+            // Create bookings for May 2025
+            await Booking.create([
+                {
+                    clientId: seededData.clients.client1._id,
+                    providerName: 'Test Provider',
+                    procedureId: seededData.procedures.facialTreatment._id,
+                    startsAt: new Date('2025-05-09T10:00:00Z'),
+                    endsAt: new Date('2025-05-09T11:00:00Z'),
+                    status: 'confirmed',
+                    paymentType: 'card'
+                },
+                {
+                    clientId: seededData.clients.client1._id,
+                    providerName: 'Test Provider',
+                    procedureId: seededData.procedures.facialTreatment._id,
+                    startsAt: new Date('2025-05-12T14:00:00Z'),
+                    endsAt: new Date('2025-05-12T15:00:00Z'),
+                    status: 'held',
+                    paymentType: 'cash'
+                },
+                {
+                    clientId: seededData.clients.client1._id,
+                    providerName: 'Test Provider',
+                    procedureId: seededData.procedures.facialTreatment._id,
+                    startsAt: new Date('2025-05-25T09:00:00Z'),
+                    endsAt: new Date('2025-05-25T10:00:00Z'),
+                    status: 'confirmed',
+                    paymentType: 'card'
+                }
+            ])
+
+            const res = await request(app)
+                .get('/api/bookings/calendar')
+                .query({ month: 5, year: 2025 })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body.month).toBe(5)
+            expect(res.body.year).toBe(2025)
+            expect(res.body.dates).toBeInstanceOf(Array)
+            expect(res.body.dates).toContain('2025-05-09')
+            expect(res.body.dates).toContain('2025-05-12')
+            expect(res.body.dates).toContain('2025-05-25')
+            expect(res.body.stats).toBeDefined()
+        })
+
+        it('should return empty dates for month with no bookings', async () => {
+            const res = await request(app)
+                .get('/api/bookings/calendar')
+                .query({ month: 1, year: 2026 })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body.month).toBe(1)
+            expect(res.body.year).toBe(2026)
+            expect(res.body.dates).toEqual([])
+        })
+
+        it('should fail without month parameter', async () => {
+            const res = await request(app)
+                .get('/api/bookings/calendar')
+                .query({ year: 2025 })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Invalid parameters')
+        })
+
+        it('should fail without year parameter', async () => {
+            const res = await request(app)
+                .get('/api/bookings/calendar')
+                .query({ month: 5 })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Invalid parameters')
+        })
+
+        it('should fail with invalid month', async () => {
+            const res = await request(app)
+                .get('/api/bookings/calendar')
+                .query({ month: 13, year: 2025 })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Invalid month')
+        })
+
+        it('should require authentication', async () => {
+            const res = await request(app)
+                .get('/api/bookings/calendar')
+                .query({ month: 5, year: 2025 })
+
+            expect(res.status).toBe(401)
         })
     })
 })

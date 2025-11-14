@@ -619,6 +619,81 @@ paths:
         '401':
           description: Unauthorized
 
+  /api/bookings/calendar:
+    get:
+      summary: Get booking calendar for a specific month
+      description: Returns dates with bookings and statistics for the specified month/year
+      tags: [Bookings]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          description: Month (1-12)
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Year (e.g., 2025)
+      responses:
+        '200':
+          description: Calendar data with booked dates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  month:
+                    type: integer
+                    example: 5
+                  year:
+                    type: integer
+                    example: 2025
+                  dates:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                    example: ['2025-05-09', '2025-05-12', '2025-05-25']
+                  stats:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        total:
+                          type: integer
+                        byStatus:
+                          type: object
+                          additionalProperties:
+                            type: integer
+                    example:
+                      '2025-05-09':
+                        total: 2
+                        byStatus:
+                          confirmed: 1
+                          held: 1
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid parameters
+                  message:
+                    type: string
+                    example: Month and year are required and must be valid numbers
+        '401':
+          description: Unauthorized
+
   /api/bookings/{id}:
     get:
       summary: Get booking by ID (Own booking or Worker/Admin)

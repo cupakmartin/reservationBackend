@@ -7,13 +7,15 @@ import {
     createBooking, 
     updateBooking,
     deleteBooking,
-    updateBookingStatus 
+    updateBookingStatus,
+    getCalendar
 } from './bookings.controller'
 
 const router = Router()
 
 // Workers and admins can view all bookings, clients see filtered results in controller
 router.get('/', authenticate, getAllBookings)
+router.get('/calendar', authenticate, getCalendar)
 router.get('/:id', authenticate, getBookingById)
 
 // All authenticated users can create bookings

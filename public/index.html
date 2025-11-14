@@ -11,17 +11,65 @@
         <header>
             <h1>Cosmetic Reservation API - Developer GUI</h1>
             <p class="subtitle">Test all API endpoints without using the terminal</p>
+            <div id="authStatus" class="auth-status">
+                <span id="userInfo">Not logged in</span>
+                <button id="logoutBtn" style="display: none;" onclick="logout()">Logout</button>
+            </div>
         </header>
 
         <div class="tabs">
-            <button class="tab-btn active" data-tab="clients">Clients</button>
+            <button class="tab-btn active" data-tab="auth">Authentication</button>
+            <button class="tab-btn" data-tab="clients">Clients</button>
             <button class="tab-btn" data-tab="materials">Materials</button>
             <button class="tab-btn" data-tab="procedures">Procedures</button>
             <button class="tab-btn" data-tab="bookings">Bookings</button>
+            <button class="tab-btn" data-tab="mailing">Mailing Service</button>
+        </div>
+
+        <!-- Authentication Tab -->
+        <div class="tab-content active" id="auth">
+            <h2>Authentication</h2>
+            
+            <div class="section">
+                <h3>Register (POST /api/auth/register)</h3>
+                <form id="registerForm">
+                    <input type="text" name="name" placeholder="Name *" required>
+                    <input type="email" name="email" placeholder="Email *" required>
+                    <input type="password" name="password" placeholder="Password (min 6 chars) *" required minlength="6">
+                    <input type="tel" name="phone" placeholder="Phone">
+                    <select name="role">
+                        <option value="client">Client</option>
+                        <option value="worker">Worker</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                    <button type="submit">Register</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Login (POST /api/auth/login)</h3>
+                <form id="loginForm">
+                    <input type="email" name="email" placeholder="Email *" required>
+                    <input type="password" name="password" placeholder="Password *" required>
+                    <button type="submit">Login</button>
+                </form>
+            </div>
+
+            <div class="section">
+                <h3>Quick Login</h3>
+                <button onclick="quickLogin('admin@test.com', 'password123')">Login as Admin</button>
+                <button onclick="quickLogin('worker@test.com', 'password123')">Login as Worker</button>
+                <button onclick="quickLogin('john@test.com', 'password123')">Login as Client</button>
+            </div>
+
+            <div class="section">
+                <h3>Refresh Token (POST /api/auth/refresh)</h3>
+                <button onclick="refreshToken()">Refresh Token</button>
+            </div>
         </div>
 
         <!-- Clients Tab -->
-        <div class="tab-content active" id="clients">
+        <div class="tab-content" id="clients">
             <h2>Clients Management</h2>
             
             <div class="section">
@@ -238,6 +286,58 @@
                     <option value="cancelled">Cancelled</option>
                 </select>
                 <button onclick="updateBookingStatus()">Update Status</button>
+            </div>
+
+            <div class="section">
+                <h3>Get Calendar (GET /api/bookings/calendar) 📅</h3>
+                <input type="number" id="calendarMonth" placeholder="Month (1-12)" min="1" max="12" value="5">
+                <input type="number" id="calendarYear" placeholder="Year" min="2020" max="2030" value="2025">
+                <button onclick="getCalendar()">Get Calendar</button>
+            </div>
+
+            <div class="section">
+                <h3>WebSocket Status 🔌</h3>
+                <div id="wsStatus" style="padding: 10px; background: #f0f0f0; border-radius: 4px;">
+                    <span id="wsIndicator">⚪ Not connected</span>
+                    <button id="wsToggle" onclick="toggleWebSocket()">Connect</button>
+                </div>
+                <div id="wsEvents" style="margin-top: 10px; max-height: 200px; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 4px; font-family: monospace; font-size: 12px;"></div>
+            </div>
+        </div>
+
+        <!-- Mailing Service Tab -->
+        <div class="tab-content" id="mailing">
+            <h2>Mailing Service (Microservice) 📧</h2>
+            <p style="color: #666; font-size: 14px;">Standalone email microservice running on port 4001. Make sure the service is started!</p>
+            
+            <div class="section">
+                <h3>Service Status</h3>
+                <button onclick="checkMailingServiceHealth()">Check Health</button>
+                <p style="font-size: 12px; color: #888;">Start service: <code>cd services/mailing-service && npm start</code></p>
+            </div>
+
+            <div class="section">
+                <h3>Send Email (POST http://localhost:4001/send-email)</h3>
+                <form id="sendEmailForm">
+                    <input type="email" name="to" placeholder="Recipient Email *" required>
+                    <input type="text" name="subject" placeholder="Email Subject *" required>
+                    <textarea name="html" placeholder="Email HTML Content *" rows="6" required><h1>Test Email</h1><p>This is a test email from the Mailing Service!</p></textarea>
+                    <button type="submit">Send Email</button>
+                </form>
+                <p style="font-size: 12px; color: #888; margin-top: 10px;">
+                    View sent emails at <a href="https://ethereal.email/messages" target="_blank">Ethereal Email</a><br>
+                    Login with: lorenza.lockman@ethereal.email / ktmv4nE7Vwq29bfwCt
+                </p>
+            </div>
+
+            <div class="section">
+                <h3>Service Info</h3>
+                <ul style="list-style: none; padding: 0; font-size: 14px;">
+                    <li>📍 <strong>URL:</strong> http://localhost:4001</li>
+                    <li>🔧 <strong>SMTP:</strong> Ethereal Email (testing)</li>
+                    <li>📨 <strong>Endpoints:</strong> POST /send-email, GET /health</li>
+                    <li>🔗 <strong>Integration:</strong> Main API calls this service via HTTP</li>
+                </ul>
             </div>
         </div>
 

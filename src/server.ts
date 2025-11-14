@@ -4,6 +4,8 @@ dotenv.config()
 
 import mongoose from 'mongoose'
 import { createApp } from './app'
+import { createServer } from 'http'
+import { initializeWebSocket } from './websocket'
 
 const PORT = Number(process.env.PORT || 4000)
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/salon'
@@ -26,7 +28,12 @@ async function main() {
   console.log('[api] Mongo connected')
 
   const app = createApp()
-  app.listen(PORT, () => console.log(`[api] listening on :${PORT}`))
+  const httpServer = createServer(app)
+  
+  // Initialize WebSocket server
+  initializeWebSocket(httpServer)
+  
+  httpServer.listen(PORT, () => console.log(`[api] listening on :${PORT}`))
 }
 
 main().catch(err => {
