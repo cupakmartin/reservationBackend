@@ -33,7 +33,7 @@ export default function Register() {
 
     try {
       const { data } = await api.post('/auth/register', formData)
-      setTokens(data.tokens.accessToken, data.tokens.refreshToken)
+      setTokens(data.accessToken, data.refreshToken)
       setUser({
         id: data.user._id,
         name: data.user.name,

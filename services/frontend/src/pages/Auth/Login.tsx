@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Ca
 import { toast } from '../../components/ui/Toast'
 
 export default function Login() {
-  console.log('[Login] Rendering...')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)

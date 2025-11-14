@@ -6,14 +6,13 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import { toast } from '../../components/ui/Toast'
-import { Plus, Edit, Trash2, Package, AlertCircle } from 'lucide-react'
+import { Plus, Edit, Trash2, Package } from 'lucide-react'
 
 interface Material {
   _id: string
   name: string
-  quantity: number
+  stockOnHand: number
   unit: string
-  minimumStock: number
 }
 
 export default function Materials() {
@@ -25,9 +24,8 @@ export default function Materials() {
 
   const [formData, setFormData] = useState({
     name: '',
-    quantity: '',
+    stockOnHand: '',
     unit: '',
-    minimumStock: '',
   })
 
   const fetchMaterials = async () => {
@@ -51,13 +49,12 @@ export default function Materials() {
       setEditingMaterial(material)
       setFormData({
         name: material.name,
-        quantity: material.quantity.toString(),
+        stockOnHand: material.stockOnHand.toString(),
         unit: material.unit,
-        minimumStock: material.minimumStock.toString(),
       })
     } else {
       setEditingMaterial(null)
-      setFormData({ name: '', quantity: '', unit: '', minimumStock: '' })
+      setFormData({ name: '', stockOnHand: '', unit: '' })
     }
     setShowModal(true)
   }
@@ -65,11 +62,11 @@ export default function Materials() {
   const handleCloseModal = () => {
     setShowModal(false)
     setEditingMaterial(null)
-    setFormData({ name: '', quantity: '', unit: '', minimumStock: '' })
+    setFormData({ name: '', stockOnHand: '', unit: '' })
   }
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.quantity || !formData.unit || !formData.minimumStock) {
+    if (!formData.name || !formData.stockOnHand || !formData.unit) {
       toast('error', 'Please fill in all required fields')
       return
     }
@@ -79,9 +76,8 @@ export default function Materials() {
     try {
       const data = {
         name: formData.name,
-        quantity: parseFloat(formData.quantity),
+        stockOnHand: parseFloat(formData.stockOnHand),
         unit: formData.unit,
-        minimumStock: parseFloat(formData.minimumStock),
       }
 
       if (editingMaterial) {
@@ -113,10 +109,6 @@ export default function Materials() {
       const err = error as { response?: { data?: { error?: string } } }
       toast('error', err.response?.data?.error || 'Failed to delete material')
     }
-  }
-
-  const isLowStock = (material: Material) => {
-    return material.quantity <= material.minimumStock
   }
 
   if (loading) {
@@ -151,9 +143,7 @@ export default function Materials() {
               {materials.map(material => (
                 <div 
                   key={material._id} 
-                  className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
-                    isLowStock(material) ? 'border-red-300 bg-red-50' : ''
-                  }`}
+                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -178,25 +168,11 @@ export default function Materials() {
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Current Stock:</span>
+                      <span className="text-sm text-gray-600">Stock on Hand:</span>
                       <span className="font-semibold text-lg">
-                        {material.quantity} {material.unit}
+                        {material.stockOnHand} {material.unit}
                       </span>
                     </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Minimum Stock:</span>
-                      <span className="text-sm font-medium">
-                        {material.minimumStock} {material.unit}
-                      </span>
-                    </div>
-
-                    {isLowStock(material) && (
-                      <div className="flex items-center gap-2 text-red-600 text-sm font-medium pt-2 border-t border-red-200">
-                        <AlertCircle className="h-4 w-4" />
-                        Low stock - Reorder soon!
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -220,11 +196,11 @@ export default function Materials() {
             />
 
             <Input
-              label="Quantity"
+              label="Stock on Hand"
               type="number"
               step="0.01"
-              value={formData.quantity}
-              onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+              value={formData.stockOnHand}
+              onChange={(e) => setFormData({ ...formData, stockOnHand: e.target.value })}
               placeholder="100"
               required
             />
@@ -233,17 +209,7 @@ export default function Materials() {
               label="Unit"
               value={formData.unit}
               onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-              placeholder="ml, pieces, bottles, etc."
-              required
-            />
-
-            <Input
-              label="Minimum Stock"
-              type="number"
-              step="0.01"
-              value={formData.minimumStock}
-              onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
-              placeholder="20"
+              placeholder="ml, g, pcs"
               required
             />
 

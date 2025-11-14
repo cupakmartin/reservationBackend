@@ -11,9 +11,8 @@ import { Plus, Edit, Trash2, Clock, DollarSign } from 'lucide-react'
 interface Procedure {
   _id: string
   name: string
-  description: string
+  durationMin: number
   price: number
-  duration: number
 }
 
 export default function Procedures() {
@@ -25,7 +24,6 @@ export default function Procedures() {
 
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
     price: '',
     duration: '',
   })
@@ -51,13 +49,12 @@ export default function Procedures() {
       setEditingProcedure(procedure)
       setFormData({
         name: procedure.name,
-        description: procedure.description,
         price: procedure.price.toString(),
-        duration: procedure.duration.toString(),
+        duration: procedure.durationMin.toString(),
       })
     } else {
       setEditingProcedure(null)
-      setFormData({ name: '', description: '', price: '', duration: '' })
+      setFormData({ name: '', price: '', duration: '' })
     }
     setShowModal(true)
   }
@@ -65,7 +62,7 @@ export default function Procedures() {
   const handleCloseModal = () => {
     setShowModal(false)
     setEditingProcedure(null)
-    setFormData({ name: '', description: '', price: '', duration: '' })
+    setFormData({ name: '', price: '', duration: '' })
   }
 
   const handleSubmit = async () => {
@@ -79,9 +76,8 @@ export default function Procedures() {
     try {
       const data = {
         name: formData.name,
-        description: formData.description,
+        durationMin: parseInt(formData.duration),
         price: parseFloat(formData.price),
-        duration: parseInt(formData.duration),
       }
 
       if (editingProcedure) {
@@ -164,10 +160,6 @@ export default function Procedures() {
                     </div>
                   </div>
 
-                  {procedure.description && (
-                    <p className="text-sm text-gray-600 mb-3">{procedure.description}</p>
-                  )}
-
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center text-green-600 font-semibold">
                       <DollarSign className="h-4 w-4" />
@@ -175,7 +167,7 @@ export default function Procedures() {
                     </div>
                     <div className="flex items-center text-gray-600">
                       <Clock className="h-4 w-4 mr-1" />
-                      {procedure.duration} min
+                      {procedure.durationMin} min
                     </div>
                   </div>
                 </div>
@@ -198,19 +190,6 @@ export default function Procedures() {
               placeholder="Haircut, Manicure, etc."
               required
             />
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Brief description of the procedure"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-              />
-            </div>
 
             <Input
               label="Price ($)"
