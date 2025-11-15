@@ -172,6 +172,7 @@
                 <h3>Create Procedure (POST /api/procedures)</h3>
                 <form id="createProcedureForm">
                     <input type="text" name="name" placeholder="Name *" required>
+                    <textarea name="description" placeholder="Description (optional)" rows="3"></textarea>
                     <input type="number" name="durationMin" placeholder="Duration (min) *" required min="1">
                     <input type="number" name="price" placeholder="Price *" required min="0" step="0.01">
                     <button type="submit">Create Procedure</button>
@@ -194,6 +195,7 @@
                 <form id="updateProcedureForm">
                     <input type="text" name="id" placeholder="Procedure ID *" required>
                     <input type="text" name="name" placeholder="New Name">
+                    <textarea name="description" placeholder="New Description" rows="3"></textarea>
                     <input type="number" name="durationMin" placeholder="New Duration (min)" min="1">
                     <input type="number" name="price" placeholder="New Price" min="0" step="0.01">
                     <button type="submit">Update Procedure</button>
@@ -342,7 +344,7 @@
         </div>
 
         <div class="response-section">
-            <h3>Response</h3>
+            <h3>Response <button id="clearResponseBtn" onclick="clearResponse()" style="margin-left: 10px; font-size: 14px;">Clear</button></h3>
             <pre id="response"></pre>
         </div>
     </div>

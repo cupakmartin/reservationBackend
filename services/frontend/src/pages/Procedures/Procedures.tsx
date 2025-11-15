@@ -4,6 +4,7 @@ import api from '../../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
+import Select from '../../components/ui/Select'
 import Modal from '../../components/ui/Modal'
 import { toast } from '../../components/ui/Toast'
 import { Plus, Edit, Trash2, Clock, DollarSign, Filter, X } from 'lucide-react'
@@ -30,6 +31,8 @@ export default function Procedures() {
     price: '',
     dateFrom: '',
     dateTo: '',
+    sortBy: 'name',
+    order: 'asc',
   })
 
   const [formData, setFormData] = useState({
@@ -47,6 +50,8 @@ export default function Procedures() {
       if (filters.price) params.append('price', filters.price)
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
       if (filters.dateTo) params.append('dateTo', filters.dateTo)
+      if (filters.sortBy) params.append('sortBy', filters.sortBy)
+      if (filters.order) params.append('order', filters.order)
       
       const queryString = params.toString()
       const { data } = await api.get(`/procedures${queryString ? `?${queryString}` : ''}`)
@@ -139,6 +144,8 @@ export default function Procedures() {
       price: '',
       dateFrom: '',
       dateTo: '',
+      sortBy: 'name',
+      order: 'asc',
     })
   }
 
@@ -207,6 +214,26 @@ export default function Procedures() {
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Select
+                label="Sort By"
+                value={filters.sortBy}
+                onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                options={[
+                  { value: 'name', label: 'Name' },
+                  { value: 'createdAt', label: 'Date Created' },
+                ]}
+              />
+              <Select
+                label="Order"
+                value={filters.order}
+                onChange={(e) => setFilters({ ...filters, order: e.target.value })}
+                options={[
+                  { value: 'asc', label: 'Ascending' },
+                  { value: 'desc', label: 'Descending' },
+                ]}
               />
             </div>
             {hasActiveFilters && (

@@ -24,7 +24,7 @@ interface Procedure {
   _id: string
   name: string
   price: number
-  duration: number
+  durationMin: number
 }
 
 interface Client {
@@ -102,7 +102,7 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
       const startsAt = new Date(`${dateStr}T${formData.time}:00`)
       
       // Calculate endsAt based on procedure duration
-      const endsAt = new Date(startsAt.getTime() + selectedProcedure.duration * 60000)
+      const endsAt = new Date(startsAt.getTime() + selectedProcedure.durationMin * 60000)
 
       await api.post('/bookings', {
         clientId: formData.clientId,
@@ -268,7 +268,7 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
               { value: '', label: 'Select a procedure' },
               ...procedures.map(p => ({ 
                 value: p._id, 
-                label: `${p.name} - $${p.price} (${p.duration} min)` 
+                label: `${p.name} - $${p.price} (${p.durationMin} min)` 
               })),
             ]}
             required

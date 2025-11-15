@@ -41,7 +41,13 @@ const buildClientFilter = (query: any): QueryFilter => {
 export const getAllClients = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const filter = buildClientFilter(req.query)
-        const clients = await Client.find(filter).sort({ name: 1 })
+        
+        // Dynamic sorting
+        const sortBy = req.query.sortBy as string || 'name'
+        const order = req.query.order as string || 'asc'
+        const sortOptions: Record<string, 1 | -1> = { [sortBy]: order === 'asc' ? 1 : -1 }
+        
+        const clients = await Client.find(filter).sort(sortOptions)
         res.json(clients)
     } catch (error) {
         next(error)

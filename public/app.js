@@ -599,3 +599,13 @@ document.getElementById('sendEmailForm').addEventListener('submit', async (e) =>
         }, true)
     }
 })
+
+// Clear response function
+function clearResponse() {
+    const responseEl = document.getElementById('response')
+    responseEl.textContent = ''
+    responseEl.className = ''
+}
+
+// Initialize auth UI on load
+updateAuthUI()

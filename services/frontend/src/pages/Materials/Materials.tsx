@@ -30,6 +30,8 @@ export default function Materials() {
     stockOnHand: '',
     dateFrom: '',
     dateTo: '',
+    sortBy: 'name',
+    order: 'asc',
   })
 
   const [formData, setFormData] = useState({
@@ -46,6 +48,8 @@ export default function Materials() {
       if (filters.stockOnHand) params.append('stockOnHand', filters.stockOnHand)
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
       if (filters.dateTo) params.append('dateTo', filters.dateTo)
+      if (filters.sortBy) params.append('sortBy', filters.sortBy)
+      if (filters.order) params.append('order', filters.order)
       
       const queryString = params.toString()
       const { data } = await api.get(`/materials${queryString ? `?${queryString}` : ''}`)
@@ -136,6 +140,8 @@ export default function Materials() {
       stockOnHand: '',
       dateFrom: '',
       dateTo: '',
+      sortBy: 'name',
+      order: 'asc',
     })
   }
 
@@ -207,6 +213,26 @@ export default function Materials() {
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Select
+                label="Sort By"
+                value={filters.sortBy}
+                onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                options={[
+                  { value: 'name', label: 'Name' },
+                  { value: 'createdAt', label: 'Date Created' },
+                ]}
+              />
+              <Select
+                label="Order"
+                value={filters.order}
+                onChange={(e) => setFilters({ ...filters, order: e.target.value })}
+                options={[
+                  { value: 'asc', label: 'Ascending' },
+                  { value: 'desc', label: 'Descending' },
+                ]}
               />
             </div>
             {hasActiveFilters && (

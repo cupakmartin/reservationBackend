@@ -13,7 +13,7 @@ import { Calendar, Clock, User, Briefcase, DollarSign, Trash2 } from 'lucide-rea
 interface Booking {
   _id: string
   client: { _id: string; name: string; email: string }
-  procedure: { _id: string; name: string; price: number; duration: number }
+  procedure: { _id: string; name: string; price: number; durationMin: number }
   date: string
   time: string
   status: string
@@ -159,7 +159,7 @@ export default function Bookings() {
                           <div className="font-semibold">{booking.procedure.name}</div>
                           <div className="text-gray-500 flex items-center">
                             <DollarSign className="h-3 w-3" />
-                            {booking.procedure.price} • {booking.procedure.duration} min
+                            {booking.procedure.price} • {booking.procedure.durationMin} min
                           </div>
                         </div>
                       </div>

@@ -40,7 +40,13 @@ const buildProcedureFilter = (query: any): QueryFilter => {
 export const getAllProcedures = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const filter = buildProcedureFilter(req.query)
-        const procedures = await Procedure.find(filter).sort({ name: 1 })
+        
+        // Dynamic sorting
+        const sortBy = req.query.sortBy as string || 'name'
+        const order = req.query.order as string || 'asc'
+        const sortOptions: Record<string, 1 | -1> = { [sortBy]: order === 'asc' ? 1 : -1 }
+        
+        const procedures = await Procedure.find(filter).sort(sortOptions)
         res.json(procedures)
     } catch (error) {
         next(error)
