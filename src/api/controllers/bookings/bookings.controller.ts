@@ -16,11 +16,15 @@ export const getAllBookings = async (req: AuthRequest, res: Response, next: Next
         // Clients can only see their own bookings
         if (req.user?.role === 'client') {
             bookings = await Booking.find({ clientId: req.user.userId })
+                .populate('clientId')
+                .populate('procedureId')
                 .sort({ createdAt: -1 })
                 .limit(50);
         } else {
             // Workers and admins can see all bookings
             bookings = await Booking.find()
+                .populate('clientId')
+                .populate('procedureId')
                 .sort({ createdAt: -1 })
                 .limit(50);
         }

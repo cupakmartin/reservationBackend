@@ -12,10 +12,10 @@ import { Calendar, Clock, User, Briefcase, DollarSign, Trash2 } from 'lucide-rea
 
 interface Booking {
   _id: string
-  client: { _id: string; name: string; email: string }
-  procedure: { _id: string; name: string; price: number; durationMin: number }
-  date: string
-  time: string
+  clientId: { _id: string; name: string; email: string }
+  procedureId: { _id: string; name: string; price: number; durationMin: number }
+  startsAt: string
+  endsAt: string
   status: string
   loyaltyPointsEarned?: number
 }
@@ -134,32 +134,36 @@ export default function Bookings() {
                       <div className="flex items-center text-sm">
                         <Calendar className="h-4 w-4 mr-2 text-gray-500" />
                         <div>
-                          <div className="font-semibold">{format(new Date(booking.date), 'MMM d, yyyy')}</div>
+                          <div className="font-semibold">
+                            {booking.startsAt ? format(new Date(booking.startsAt), 'MMM d, yyyy') : 'N/A'}
+                          </div>
                         </div>
                       </div>
 
                       <div className="flex items-center text-sm">
                         <Clock className="h-4 w-4 mr-2 text-gray-500" />
                         <div>
-                          <div className="font-semibold">{booking.time}</div>
+                          <div className="font-semibold">
+                            {booking.startsAt ? format(new Date(booking.startsAt), 'HH:mm') : 'N/A'}
+                          </div>
                         </div>
                       </div>
 
                       <div className="flex items-center text-sm">
                         <User className="h-4 w-4 mr-2 text-gray-500" />
                         <div>
-                          <div className="font-semibold">{booking.client.name}</div>
-                          <div className="text-gray-500">{booking.client.email}</div>
+                          <div className="font-semibold">{booking.clientId?.name ?? 'N/A'}</div>
+                          <div className="text-gray-500">{booking.clientId?.email ?? 'N/A'}</div>
                         </div>
                       </div>
 
                       <div className="flex items-center text-sm">
                         <Briefcase className="h-4 w-4 mr-2 text-gray-500" />
                         <div>
-                          <div className="font-semibold">{booking.procedure.name}</div>
+                          <div className="font-semibold">{booking.procedureId?.name ?? 'N/A'}</div>
                           <div className="text-gray-500 flex items-center">
                             <DollarSign className="h-3 w-3" />
-                            {booking.procedure.price} • {booking.procedure.durationMin} min
+                            {booking.procedureId?.price ?? 0} • {booking.procedureId?.durationMin ?? 0} min
                           </div>
                         </div>
                       </div>
