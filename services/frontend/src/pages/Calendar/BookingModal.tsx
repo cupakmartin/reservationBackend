@@ -12,12 +12,13 @@ import { Calendar, Clock, User, Briefcase, DollarSign } from 'lucide-react'
 
 interface Booking {
   _id: string
-  client: { _id: string; name: string; email: string }
-  procedure: { _id: string; name: string; price: number; duration: number }
-  date: string
-  time: string
+  clientId: { _id: string; name: string; email: string } | string
+  workerId: { _id: string; name: string } | string
+  procedureId: { _id: string; name: string; price: number; durationMin: number } | string
+  startsAt: string
+  endsAt: string
   status: string
-  loyaltyPointsEarned?: number
+  paymentType: string
 }
 
 interface Procedure {
@@ -33,6 +34,11 @@ interface Client {
   email: string
 }
 
+interface Worker {
+  _id: string
+  name: string
+}
+
 interface BookingModalProps {
   date: Date
   onClose: () => void
@@ -44,13 +50,14 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
   const [bookings, setBookings] = useState<Booking[]>([])
   const [procedures, setProcedures] = useState<Procedure[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [workers, setWorkers] = useState<Worker[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     clientId: user?.role === 'client' ? user.id : '',
     procedureId: '',
-    providerName: '',
+    workerId: '',
     time: '',
     status: 'held',
     paymentType: 'cash',
@@ -60,17 +67,21 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
     const fetchData = async () => {
       try {
         const dateStr = format(date, 'yyyy-MM-dd')
-        const [bookingsRes, proceduresRes, clientsRes] = await Promise.all([
+        const [bookingsRes, proceduresRes, clientsRes, workersRes] = await Promise.all([
           api.get(`/bookings?date=${dateStr}`),
           api.get('/procedures'),
           user?.role !== 'client' ? api.get('/clients') : Promise.resolve({ data: [] }),
+          api.get('/clients/workers'),
         ])
 
         setBookings(bookingsRes.data)
         setProcedures(proceduresRes.data)
         setClients(clientsRes.data)
-      } catch (error) {
-        toast('error', 'Failed to load booking data')
+        setWorkers(workersRes.data)
+      } catch (error: any) {
+        console.error('Error fetching booking data:', error)
+        const errorMessage = error.response?.data?.error || 'Failed to load booking data'
+        toast('error', errorMessage)
       } finally {
         setLoading(false)
       }
@@ -79,8 +90,37 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
     fetchData()
   }, [date, user?.role])
 
+  const getBookingTime = (booking: Booking) => {
+    try {
+      return format(new Date(booking.startsAt), 'HH:mm')
+    } catch {
+      return 'N/A'
+    }
+  }
+
+  const getClientName = (booking: Booking) => {
+    if (typeof booking.clientId === 'object' && booking.clientId?.name) {
+      return booking.clientId.name
+    }
+    return 'Unknown Client'
+  }
+
+  const getProcedureName = (booking: Booking) => {
+    if (typeof booking.procedureId === 'object' && booking.procedureId?.name) {
+      return booking.procedureId.name
+    }
+    return 'Unknown Procedure'
+  }
+
+  const getProcedurePrice = (booking: Booking) => {
+    if (typeof booking.procedureId === 'object' && booking.procedureId?.price) {
+      return booking.procedureId.price
+    }
+    return 0
+  }
+
   const handleSubmit = async () => {
-    if (!formData.clientId || !formData.procedureId || !formData.time || !formData.providerName) {
+    if (!formData.clientId || !formData.procedureId || !formData.time || !formData.workerId) {
       toast('error', 'Please fill in all required fields')
       return
     }
@@ -107,7 +147,7 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
       await api.post('/bookings', {
         clientId: formData.clientId,
         procedureId: formData.procedureId,
-        providerName: formData.providerName,
+        workerId: formData.workerId,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         status: formData.status,
@@ -185,19 +225,19 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center text-sm">
                         <Clock className="h-4 w-4 mr-2 text-gray-500" />
-                        <span className="font-semibold">{booking.time}</span>
+                        <span className="font-semibold">{getBookingTime(booking)}</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <User className="h-4 w-4 mr-2 text-gray-500" />
-                        <span>{booking.client.name}</span>
+                        <span>{getClientName(booking)}</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <Briefcase className="h-4 w-4 mr-2 text-gray-500" />
-                        <span>{booking.procedure.name}</span>
+                        <span>{getProcedureName(booking)}</span>
                       </div>
                       <div className="flex items-center text-sm">
                         <DollarSign className="h-4 w-4 mr-2 text-gray-500" />
-                        <span>${booking.procedure.price}</span>
+                        <span>${getProcedurePrice(booking)}</span>
                       </div>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
@@ -274,19 +314,24 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
             required
           />
 
-          <Input
-            label="Provider Name"
-            value={formData.providerName}
-            onChange={(e) => setFormData({ ...formData, providerName: e.target.value })}
-            placeholder="Name of the service provider"
+          <Select
+            label="Worker"
+            value={formData.workerId}
+            onChange={(e) => setFormData({ ...formData, workerId: e.target.value })}
+            options={[
+              { value: '', label: 'Select a worker' },
+              ...workers.map(w => ({ value: w._id, label: w.name })),
+            ]}
             required
           />
 
           <Input
-            label="Time"
+            label="Time (08:00 - 20:00)"
             type="time"
             value={formData.time}
             onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+            min="08:00"
+            max="20:00"
             required
           />
 

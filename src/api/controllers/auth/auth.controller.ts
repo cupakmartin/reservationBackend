@@ -87,3 +87,38 @@ export const refresh = async (
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 };
+
+export const getMe = async (
+  req: any,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    
+    if (!userId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const user = await authService.getUserById(userId);
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const userResponse = user.toObject();
+    
+    // Mask password: show *** + last 3 characters
+    if (userResponse.password && userResponse.password.length > 3) {
+      userResponse.password = '***' + userResponse.password.slice(-3);
+    }
+    
+    delete userResponse.refreshToken;
+
+    res.json(userResponse);
+  } catch (error) {
+    next(error);
+  }
+};

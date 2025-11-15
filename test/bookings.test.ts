@@ -43,23 +43,30 @@ describe('Booking API', () => {
     })
 
     describe('GET /api/bookings', () => {
-        it('should return all seeded bookings', async () => {
+        it('should return all seeded bookings for admin', async () => {
+            const res = await request(app)
+                .get('/api/bookings')
+                .set('Authorization', `Bearer ${adminToken}`)
+            expect(res.status).toBe(200)
+            expect(res.body).toHaveLength(5) // 5 seeded bookings
+        })
+
+        it('should return 403 for worker', async () => {
             const res = await request(app)
                 .get('/api/bookings')
                 .set('Authorization', `Bearer ${workerToken}`)
-            expect(res.status).toBe(200)
-            expect(res.body).toHaveLength(5) // 5 seeded bookings
+            expect(res.status).toBe(403)
         })
     })
 
     describe('POST /api/bookings', () => {
-        it('should create a new booking with valid data', async () => {
+        it('should create a new booking with valid data and calculate finalPrice', async () => {
             const bookingData = {
                 clientId: seededData.clients.client1._id.toString(),
-                providerName: 'Dr. Smith',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id.toString(),
-                startsAt: '2025-12-25T14:00:00Z',
-                endsAt: '2025-12-25T15:00:00Z',
+                startsAt: '2025-12-22T14:00:00Z', // Monday
+                endsAt: '2025-12-22T15:00:00Z',
                 status: 'confirmed',
                 paymentType: 'card'
             }
@@ -71,7 +78,9 @@ describe('Booking API', () => {
 
             expect(res.status).toBe(201)
             expect(res.body.clientId).toBe(bookingData.clientId)
-            expect(res.body.providerName).toBe(bookingData.providerName)
+            expect(res.body.workerId).toBe(bookingData.workerId)
+            expect(res.body.finalPrice).toBeDefined()
+            expect(res.body.finalPrice).toBe(120 * 0.95) // Bronze tier 5% discount
             expect(res.body._id).toBeDefined()
         })
 
@@ -79,7 +88,7 @@ describe('Booking API', () => {
             const res = await request(app)
                 .post('/api/bookings')
                 .set('Authorization', `Bearer ${workerToken}`)
-                .send({ providerName: 'Test' })
+                .send({ workerId: seededData.clients.worker._id.toString() })
 
             expect(res.status).toBe(400)
             expect(res.body.error).toBe('Validation failed')
@@ -91,7 +100,7 @@ describe('Booking API', () => {
                 .set('Authorization', `Bearer ${workerToken}`)
                 .send({
                     clientId: seededData.clients.client1._id.toString(),
-                    providerName: 'Test',
+                    workerId: seededData.clients.worker._id.toString(),
                     procedureId: seededData.procedures.facialTreatment._id.toString(),
                     startsAt: '2025-12-15T14:00:00Z',
                     endsAt: '2025-12-15T15:00:00Z',
@@ -109,12 +118,90 @@ describe('Booking API', () => {
                 .set('Authorization', `Bearer ${workerToken}`)
                 .send({
                     clientId: seededData.clients.client1._id.toString(),
-                    providerName: 'Test',
+                    workerId: seededData.clients.worker._id.toString(),
                     procedureId: seededData.procedures.facialTreatment._id.toString(),
                     startsAt: '2025-12-15T14:00:00Z',
                     endsAt: '2025-12-15T15:00:00Z',
                     status: 'confirmed',
                     paymentType: 'bitcoin'
+                })
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Validation failed')
+        })
+
+        it('should fail when booking on weekend (Saturday)', async () => {
+            const res = await request(app)
+                .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
+                .send({
+                    clientId: seededData.clients.client1._id.toString(),
+                    workerId: seededData.clients.worker._id.toString(),
+                    procedureId: seededData.procedures.facialTreatment._id.toString(),
+                    startsAt: '2025-12-20T14:00:00Z', // Saturday
+                    endsAt: '2025-12-20T15:00:00Z',
+                    status: 'confirmed',
+                    paymentType: 'card'
+                })
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Validation failed')
+        })
+
+        it('should fail when booking on weekend (Sunday)', async () => {
+            const res = await request(app)
+                .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
+                .send({
+                    clientId: seededData.clients.client1._id.toString(),
+                    workerId: seededData.clients.worker._id.toString(),
+                    procedureId: seededData.procedures.facialTreatment._id.toString(),
+                    startsAt: '2025-12-21T14:00:00Z', // Sunday
+                    endsAt: '2025-12-21T15:00:00Z',
+                    status: 'confirmed',
+                    paymentType: 'card'
+                })
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Validation failed')
+        })
+
+        it('should fail when booking before 08:00', async () => {
+            // Create date in local timezone at 7 AM (before allowed hours)
+            const startDate = new Date('2025-12-22')
+            startDate.setHours(7, 0, 0, 0)
+            const endDate = new Date('2025-12-22')
+            endDate.setHours(8, 0, 0, 0)
+            
+            const res = await request(app)
+                .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
+                .send({
+                    clientId: seededData.clients.client1._id.toString(),
+                    workerId: seededData.clients.worker._id.toString(),
+                    procedureId: seededData.procedures.facialTreatment._id.toString(),
+                    startsAt: startDate.toISOString(),
+                    endsAt: endDate.toISOString(),
+                    status: 'confirmed',
+                    paymentType: 'card'
+                })
+
+            expect(res.status).toBe(400)
+            expect(res.body.error).toBe('Validation failed')
+        })
+
+        it('should fail when booking after 20:00', async () => {
+            const res = await request(app)
+                .post('/api/bookings')
+                .set('Authorization', `Bearer ${workerToken}`)
+                .send({
+                    clientId: seededData.clients.client1._id.toString(),
+                    workerId: seededData.clients.worker._id.toString(),
+                    procedureId: seededData.procedures.facialTreatment._id.toString(),
+                    startsAt: '2025-12-22T20:00:00Z', // Monday, 8:00 PM
+                    endsAt: '2025-12-22T21:00:00Z', // Ends at 9:00 PM
+                    status: 'confirmed',
+                    paymentType: 'card'
                 })
 
             expect(res.status).toBe(400)
@@ -126,12 +213,13 @@ describe('Booking API', () => {
         it('should update booking status', async () => {
             const booking = await Booking.create({
                 clientId: seededData.clients.client1._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             const res = await request(app)
@@ -154,12 +242,13 @@ describe('Booking API', () => {
         it('should deduct material stock when status is fulfilled', async () => {
             const booking = await Booking.create({
                 clientId: seededData.clients.client1._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id, // Has BOM with materials
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             const material = seededData.materials.hyaluronicAcid
@@ -186,12 +275,13 @@ describe('Booking API', () => {
 
             const booking = await Booking.create({
                 clientId: loyaltyClient._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             await request(app)
@@ -200,25 +290,26 @@ describe('Booking API', () => {
 
             const updatedClient = await Client.findById(loyaltyClient._id)
             expect(updatedClient?.visitsCount).toBe(3)
-            expect(updatedClient?.loyaltyTier).toBe('Bronze')
+            expect(updatedClient?.loyaltyTier).toBeNull()
         })
 
         it('should upgrade loyalty tier from Bronze to Silver', async () => {
             const loyaltyClient = await Client.create({
                 name: 'Silver Client',
                 email: 'silver@test.com',
-                visitsCount: 7,
+                visitsCount: 24,
                 loyaltyTier: 'Bronze'
             })
 
             const booking = await Booking.create({
                 clientId: loyaltyClient._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             await request(app)
@@ -226,7 +317,7 @@ describe('Booking API', () => {
                 .set('Authorization', `Bearer ${workerToken}`)
 
             const updatedClient = await Client.findById(loyaltyClient._id)
-            expect(updatedClient?.visitsCount).toBe(8)
+            expect(updatedClient?.visitsCount).toBe(25)
             expect(updatedClient?.loyaltyTier).toBe('Silver')
         })
 
@@ -234,18 +325,19 @@ describe('Booking API', () => {
             const loyaltyClient = await Client.create({
                 name: 'Gold Client',
                 email: 'gold@test.com',
-                visitsCount: 14,
+                visitsCount: 49,
                 loyaltyTier: 'Silver'
             })
 
             const booking = await Booking.create({
                 clientId: loyaltyClient._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             await request(app)
@@ -253,7 +345,7 @@ describe('Booking API', () => {
                 .set('Authorization', `Bearer ${workerToken}`)
 
             const updatedClient = await Client.findById(loyaltyClient._id)
-            expect(updatedClient?.visitsCount).toBe(15)
+            expect(updatedClient?.visitsCount).toBe(50)
             expect(updatedClient?.loyaltyTier).toBe('Gold')
         })
     })
@@ -262,19 +354,20 @@ describe('Booking API', () => {
         it('should return booking by id', async () => {
             const booking = await Booking.create({
                 clientId: seededData.clients.client1._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             const res = await request(app)
                 .get(`/api/bookings/${booking._id}`)
                 .set('Authorization', `Bearer ${workerToken}`)
             expect(res.status).toBe(200)
-            expect(res.body.providerName).toBe('Test Provider')
+            expect(res.body.workerId).toBe(seededData.clients.worker._id.toString())
         })
 
         it('should return 404 for non-existent booking', async () => {
@@ -290,24 +383,25 @@ describe('Booking API', () => {
         it('should update booking', async () => {
             const booking = await Booking.create({
                 clientId: seededData.clients.client1._id,
-                providerName: 'Old Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'held',
-                paymentType: 'cash'
+                paymentType: 'cash',
+                finalPrice: 120
             })
 
             const res = await request(app)
                 .put(`/api/bookings/${booking._id}`)
                 .set('Authorization', `Bearer ${workerToken}`)
                 .send({ 
-                    providerName: 'New Provider',
+                    workerId: seededData.clients.worker._id.toString(),
                     status: 'confirmed'
                 })
 
             expect(res.status).toBe(200)
-            expect(res.body.providerName).toBe('New Provider')
+            expect(res.body.workerId).toBe(seededData.clients.worker._id.toString())
             expect(res.body.status).toBe('confirmed')
         })
 
@@ -315,20 +409,21 @@ describe('Booking API', () => {
             const res = await request(app)
                 .put('/api/bookings/507f1f77bcf86cd799439011')
                 .set('Authorization', `Bearer ${workerToken}`)
-                .send({ providerName: 'New Provider' })
+                .send({ workerId: seededData.clients.worker._id.toString() })
             
             expect(res.status).toBe(404)
         })
 
-        it('should reject invalid status on update', async () => {
+        it('should not allow updating status to invalid value', async () => {
             const booking = await Booking.create({
                 clientId: seededData.clients.client1._id,
-                providerName: 'Test Provider',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             const res = await request(app)
@@ -344,12 +439,13 @@ describe('Booking API', () => {
         it('should delete booking', async () => {
             const booking = await Booking.create({
                 clientId: seededData.clients.client1._id,
-                providerName: 'To Delete',
+                workerId: seededData.clients.worker._id.toString(),
                 procedureId: seededData.procedures.facialTreatment._id,
                 startsAt: new Date('2025-12-15T14:00:00Z'),
                 endsAt: new Date('2025-12-15T15:00:00Z'),
                 status: 'confirmed',
-                paymentType: 'card'
+                paymentType: 'card',
+                finalPrice: 120
             })
 
             const res = await request(app)
@@ -376,30 +472,33 @@ describe('Booking API', () => {
             await Booking.create([
                 {
                     clientId: seededData.clients.client1._id,
-                    providerName: 'Test Provider',
+                    workerId: seededData.clients.worker._id.toString(),
                     procedureId: seededData.procedures.facialTreatment._id,
                     startsAt: new Date('2025-05-09T10:00:00Z'),
                     endsAt: new Date('2025-05-09T11:00:00Z'),
                     status: 'confirmed',
-                    paymentType: 'card'
+                    paymentType: 'card',
+                    finalPrice: 120
                 },
                 {
                     clientId: seededData.clients.client1._id,
-                    providerName: 'Test Provider',
+                    workerId: seededData.clients.worker._id.toString(),
                     procedureId: seededData.procedures.facialTreatment._id,
                     startsAt: new Date('2025-05-12T14:00:00Z'),
                     endsAt: new Date('2025-05-12T15:00:00Z'),
                     status: 'held',
-                    paymentType: 'cash'
+                    paymentType: 'cash',
+                    finalPrice: 120
                 },
                 {
                     clientId: seededData.clients.client1._id,
-                    providerName: 'Test Provider',
+                    workerId: seededData.clients.worker._id.toString(),
                     procedureId: seededData.procedures.facialTreatment._id,
                     startsAt: new Date('2025-05-25T09:00:00Z'),
                     endsAt: new Date('2025-05-25T10:00:00Z'),
                     status: 'confirmed',
-                    paymentType: 'card'
+                    paymentType: 'card',
+                    finalPrice: 120
                 }
             ])
 

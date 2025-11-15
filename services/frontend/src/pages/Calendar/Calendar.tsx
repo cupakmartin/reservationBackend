@@ -29,9 +29,10 @@ export default function Calendar() {
       const { data } = await api.get(`/bookings/calendar?month=${month}&year=${year}`)
       // Ensure data is always an array
       setBookedDates(Array.isArray(data) ? data : [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Calendar] Error fetching data:', error)
-      toast('error', 'Failed to load calendar data')
+      const errorMessage = error.response?.data?.error || 'Failed to load calendar data'
+      toast('error', errorMessage)
       setBookedDates([]) // Set empty array on error
     } finally {
       setLoading(false)
@@ -52,8 +53,9 @@ export default function Calendar() {
   const monthEnd = endOfMonth(currentDate)
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
 
+  // Adjust start day to Monday (1) instead of Sunday (0)
   const startDay = monthStart.getDay()
-  const emptyCells = Array(startDay).fill(null)
+  const emptyCells = Array(startDay === 0 ? 6 : startDay - 1).fill(null)
 
   const isDateBooked = (date: Date) => {
     if (!Array.isArray(bookedDates)) return false
@@ -73,6 +75,13 @@ export default function Calendar() {
     today.setHours(0, 0, 0, 0)
     if (date < today) return
     
+    // Prevent booking on weekends (0 = Sunday, 6 = Saturday)
+    const dayOfWeek = date.getDay()
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      toast('error', 'Bookings are only allowed Monday-Friday')
+      return
+    }
+    
     setSelectedDate(date)
     setShowBookingModal(true)
   }
@@ -89,6 +98,11 @@ export default function Calendar() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     return date < today
+  }
+
+  const isWeekend = (date: Date) => {
+    const dayOfWeek = date.getDay()
+    return dayOfWeek === 0 || dayOfWeek === 6
   }
 
   if (loading) {
@@ -120,7 +134,7 @@ export default function Calendar() {
         <CardContent className="px-0">
           <div className="flex justify-center">
             <div className="grid grid-cols-7">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
               <div key={day} className="text-center font-semibold text-gray-600 py-1 text-xs w-12">
                 {day}
               </div>
@@ -135,22 +149,25 @@ export default function Calendar() {
               const bookingCount = getBookingCount(day)
               const isToday = isSameDay(day, new Date())
               const isPast = isPastDate(day)
+              const isWeekendDay = isWeekend(day)
 
               return (
                 <button
                   key={day.toISOString()}
                   onClick={() => handleDateClick(day)}
-                  disabled={isPast}
+                  disabled={isPast || isWeekendDay}
                   className={`
                     w-12 h-12 p-1 border transition-all text-xs
                     ${isToday ? 'border-blue-500 bg-blue-50 font-bold' : 'border-gray-200'}
-                    ${isPast 
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                      : isBooked 
-                        ? 'bg-blue-100 hover:bg-blue-200 hover:shadow-md' 
-                        : 'hover:bg-blue-50 hover:shadow-md hover:border-blue-300'
+                    ${isWeekendDay
+                      ? 'bg-red-50 text-red-400 cursor-not-allowed'
+                      : isPast 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : isBooked 
+                          ? 'bg-blue-100 hover:bg-blue-200 hover:shadow-md' 
+                          : 'hover:bg-blue-50 hover:shadow-md hover:border-blue-300'
                     }
-                    ${!isPast && 'active:scale-95'}
+                    ${!isPast && !isWeekendDay && 'active:scale-95'}
                     relative flex items-center justify-center
                   `}
                 >
@@ -183,6 +200,10 @@ export default function Calendar() {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-gray-400 rounded"></div>
               <span>Past</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-300 rounded"></div>
+              <span>Weekend (closed)</span>
             </div>
           </div>
         </CardContent>

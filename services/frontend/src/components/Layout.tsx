@@ -1,7 +1,7 @@
 // src/components/Layout.tsx
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { LogOut, Calendar, Users, Package, Clipboard, Home } from 'lucide-react'
+import { LogOut, Calendar, Users, Package, Clipboard, Home, CalendarCheck } from 'lucide-react'
 import Button from './ui/Button'
 
 interface LayoutProps {
@@ -24,6 +24,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Dashboard', href: '/', icon: Home, roles: ['client', 'worker', 'admin'] },
     { name: 'Calendar', href: '/calendar', icon: Calendar, roles: ['client', 'worker', 'admin'] },
     { name: 'Bookings', href: '/bookings', icon: Clipboard, roles: ['client', 'worker', 'admin'] },
+    { name: 'My Schedule', href: '/my-schedule', icon: CalendarCheck, roles: ['worker'] },
     { name: 'Procedures', href: '/procedures', icon: Package, roles: ['worker', 'admin'] },
     { name: 'Clients', href: '/clients', icon: Users, roles: ['admin'] },
     { name: 'Materials', href: '/materials', icon: Package, roles: ['worker', 'admin'] },

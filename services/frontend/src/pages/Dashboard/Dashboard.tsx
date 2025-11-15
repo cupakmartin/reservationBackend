@@ -4,8 +4,11 @@ import { useAuthStore } from '../../store/authStore'
 import { useWebSocket } from '../../lib/websocket'
 import api from '../../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
-import { Calendar, Users, Package, Briefcase, Clock, CheckCircle } from 'lucide-react'
+import { Calendar, Users, Package, Briefcase, Clock, CheckCircle, User } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import Modal from '../../components/ui/Modal'
+import Button from '../../components/ui/Button'
+import { toast } from '../../components/ui/Toast'
 
 interface Stats {
   bookings: { total: number; pending: number; confirmed: number; completed: number }
@@ -14,11 +17,25 @@ interface Stats {
   materials?: number
 }
 
+interface UserDetails {
+  _id: string
+  name: string
+  email: string
+  password: string
+  phone?: string
+  loyaltyTier: string | null
+  visitsCount: number
+  role: string
+}
+
 export default function Dashboard() {
   const { user } = useAuthStore()
   const { isConnected } = useWebSocket()
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showAccountModal, setShowAccountModal] = useState(false)
+  const [userDetails, setUserDetails] = useState<UserDetails | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -38,9 +55,9 @@ export default function Dashboard() {
         setStats({
           bookings: {
             total: bookings.length,
-            pending: bookings.filter((b: any) => b.status === 'pending').length,
+            pending: bookings.filter((b: any) => b.status === 'held').length,
             confirmed: bookings.filter((b: any) => b.status === 'confirmed').length,
-            completed: bookings.filter((b: any) => b.status === 'completed').length,
+            completed: bookings.filter((b: any) => b.status === 'fulfilled').length,
           },
           clients: clients.length,
           procedures: procedures.length,
@@ -55,6 +72,24 @@ export default function Dashboard() {
 
     fetchStats()
   }, [user?.role])
+
+  const fetchUserDetails = async () => {
+    setLoadingDetails(true)
+    try {
+      const { data } = await api.get('/auth/me')
+      setUserDetails(data)
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Failed to load account details'
+      toast('error', errorMessage)
+    } finally {
+      setLoadingDetails(false)
+    }
+  }
+
+  const handleOpenAccountModal = () => {
+    setShowAccountModal(true)
+    fetchUserDetails()
+  }
 
   if (loading) {
     return (
@@ -71,12 +106,18 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name}!</h1>
           <p className="text-gray-600 mt-1">Here's what's happening with your salon today.</p>
         </div>
-        {isConnected && (
-          <div className="flex items-center text-green-600 text-sm">
-            <div className="w-2 h-2 bg-green-600 rounded-full mr-2 animate-pulse"></div>
-            Live updates active
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          <Button variant="secondary" onClick={handleOpenAccountModal}>
+            <User className="h-4 w-4 mr-2" />
+            My Account
+          </Button>
+          {isConnected && (
+            <div className="flex items-center text-green-600 text-sm">
+              <div className="w-2 h-2 bg-green-600 rounded-full mr-2 animate-pulse"></div>
+              Live updates active
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -211,6 +252,51 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {showAccountModal && (
+        <Modal onClose={() => setShowAccountModal(false)} title="My Account">
+          {loadingDetails ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : userDetails ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <p className="text-gray-900 font-medium">{userDetails.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <p className="text-gray-900">{userDetails.email}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <p className="text-gray-900 font-mono">{userDetails.password}</p>
+              </div>
+              {userDetails.phone && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <p className="text-gray-900">{userDetails.phone}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <p className="text-gray-900 capitalize">{userDetails.role}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Loyalty Tier</label>
+                <p className="text-gray-900">{userDetails.loyaltyTier || 'None'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total Visits</label>
+                <p className="text-gray-900 font-semibold">{userDetails.visitsCount}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 py-4">Failed to load account details</p>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }

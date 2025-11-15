@@ -3,7 +3,7 @@ import { Booking } from '../../../database/models/booking.model'
 import { Procedure } from '../../../database/models/procedure.model'
 import { Material } from '../../../database/models/material.model'
 import { Client } from '../../../database/models/client.model'
-import { applyLoyaltyAfterFulfilled } from '../../../services/loyalty.service'
+import { updateClientTier } from '../../../services/loyalty.service'
 import { sendEmail } from '../../../services/mailing.service'
 import { emitBookingUpdate } from '../../../websocket'
 import { AuthRequest } from '../../../middleware/auth'
@@ -11,23 +11,39 @@ import mongoose from 'mongoose'
 
 export const getAllBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        let bookings;
+        // Admin only - see all bookings
+        const bookings = await Booking.find()
+            .populate('clientId')
+            .populate('workerId')
+            .populate('procedureId')
+            .sort({ createdAt: -1 })
+            .limit(50);
         
-        // Clients can only see their own bookings
-        if (req.user?.role === 'client') {
-            bookings = await Booking.find({ clientId: req.user.userId })
-                .populate('clientId')
-                .populate('procedureId')
-                .sort({ createdAt: -1 })
-                .limit(50);
-        } else {
-            // Workers and admins can see all bookings
-            bookings = await Booking.find()
-                .populate('clientId')
-                .populate('procedureId')
-                .sort({ createdAt: -1 })
-                .limit(50);
-        }
+        res.json(bookings);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const bookings = await Booking.find({ workerId: req.user?.userId })
+            .populate('clientId')
+            .populate('procedureId')
+            .sort({ startsAt: 1 });
+        
+        res.json(bookings);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getClientBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const bookings = await Booking.find({ clientId: req.user?.userId })
+            .populate('workerId')
+            .populate('procedureId')
+            .sort({ startsAt: -1 });
         
         res.json(bookings);
     } catch (error) {
@@ -61,19 +77,48 @@ export const getBookingById = async (req: AuthRequest, res: Response, next: Next
 export const createBooking = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         // If the user is a client, force the booking to be for themselves
-        const bookingData = req.user?.role === 'client' 
-            ? { ...req.body, clientId: req.user.userId }
-            : req.body;
-            
-        const booking = await Booking.create(bookingData);
-        await sendBookingNotifications(booking);
+        const clientId = req.user?.role === 'client' ? req.user.userId : req.body.clientId
+        
+        // Fetch client and procedure for discount calculation
+        const client = await Client.findById(clientId)
+        if (!client) {
+            return res.status(404).json({ error: 'Client not found' })
+        }
+        
+        const procedure = await Procedure.findById(req.body.procedureId)
+        if (!procedure) {
+            return res.status(404).json({ error: 'Procedure not found' })
+        }
+        
+        // Calculate discount based on loyalty tier
+        const discountPercent = getDiscountForTier(client.loyaltyTier)
+        const finalPrice = procedure.price * (1 - discountPercent)
+        
+        const bookingData = {
+            ...req.body,
+            clientId,
+            finalPrice
+        }
+        
+        const booking = await Booking.create(bookingData)
+        await sendBookingNotifications(booking)
         
         // Emit WebSocket event
-        emitBookingUpdate('created', booking);
+        emitBookingUpdate('created', booking)
         
-        res.status(201).json(booking);
+        res.status(201).json(booking)
     } catch (error) {
-        next(error);
+        next(error)
+    }
+}
+
+const getDiscountForTier = (tier: string | null): number => {
+    switch (tier) {
+        case 'Gold': return 0.2
+        case 'Silver': return 0.1
+        case 'Bronze': return 0.05
+        case 'Worker': return 0.5
+        default: return 0
     }
 }
 
@@ -120,11 +165,17 @@ export const deleteBooking = async (req: AuthRequest, res: Response, next: NextF
             return res.status(404).json({ error: 'Booking not found' })
         }
         
-        const booking = await Booking.findByIdAndDelete(req.params.id)
+        const booking = await Booking.findById(req.params.id)
         
         if (!booking) {
             return res.status(404).json({ error: 'Booking not found' })
         }
+        
+        if (booking.status === 'fulfilled') {
+            return res.status(400).json({ error: 'Completed bookings cannot be deleted.' })
+        }
+        
+        await Booking.findByIdAndDelete(req.params.id)
         
         // Emit WebSocket event
         emitBookingUpdate('deleted', { id: req.params.id });
@@ -171,15 +222,66 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response, next:
             return res.status(404).json({ error: 'Booking not found' })
         }
         
+        const currentStatus = booking.status
+        
+        // Client cancellation check
+        if (req.user?.role === 'client') {
+            if (currentStatus !== 'held' || newStatus !== 'cancelled') {
+                return res.status(403).json({ 
+                    error: 'Clients can only cancel bookings with status "held"' 
+                })
+            }
+        }
+        
+        // Validate state transition for workers/admins
+        if (!isValidTransition(currentStatus, newStatus, req.user?.role || '')) {
+            const statusNames: Record<string, string> = {
+                held: 'Pending',
+                confirmed: 'Confirmed',
+                fulfilled: 'Completed',
+                cancelled: 'Cancelled'
+            }
+            return res.status(400).json({ 
+                error: `Invalid status transition: Cannot go from ${statusNames[currentStatus] || currentStatus} to ${statusNames[newStatus] || newStatus}.` 
+            })
+        }
+        
+        // Handle cancellation - store previous status
+        if (newStatus === 'cancelled' && currentStatus !== 'cancelled') {
+            (booking as any).previousStatus = currentStatus
+        }
+        
+        // Handle undo cancellation - clear previous status
+        if (currentStatus === 'cancelled' && newStatus !== 'cancelled') {
+            (booking as any).previousStatus = undefined
+        }
+        
+        // Track visit changes
+        if (newStatus === 'fulfilled' && currentStatus !== 'fulfilled') {
+            // Increment visits when transitioning TO fulfilled
+            await Client.findByIdAndUpdate(
+                booking.clientId,
+                { $inc: { visitsCount: 1 } }
+            )
+            await updateClientTier(String(booking.clientId))
+        } else if (newStatus === 'cancelled' && currentStatus === 'fulfilled') {
+            // Decrement visits when cancelling a fulfilled booking
+            await Client.findByIdAndUpdate(
+                booking.clientId,
+                { $inc: { visitsCount: -1 } }
+            )
+            await updateClientTier(String(booking.clientId))
+        }
+        
         booking.status = newStatus as any
         await booking.save()
         
         if (newStatus === 'fulfilled') {
-            await handleFulfilledBooking(booking)
+            await deductMaterialStock(String(booking.procedureId))
         }
         
         // Emit WebSocket event
-        emitBookingUpdate('status_changed', booking);
+        emitBookingUpdate('status_changed', booking)
         
         res.json(booking)
     } catch (error) {
@@ -187,9 +289,21 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response, next:
     }
 }
 
-const handleFulfilledBooking = async (booking: any) => {
-    await deductMaterialStock(booking.procedureId)
-    await applyLoyaltyAfterFulfilled(String(booking.clientId))
+const isValidTransition = (currentStatus: string, newStatus: string, userRole: string): boolean => {
+    // Allow cancellation from any state
+    if (newStatus === 'cancelled') return true
+    
+    // Allow undo cancellation to previous status (held or confirmed)
+    if (currentStatus === 'cancelled') {
+        return newStatus === 'held' || newStatus === 'confirmed'
+    }
+    
+    // Forward-only state machine for workers/admins
+    if (currentStatus === 'held') return newStatus === 'confirmed'
+    if (currentStatus === 'confirmed') return newStatus === 'fulfilled'
+    if (currentStatus === 'fulfilled') return false
+    
+    return false
 }
 
 const deductMaterialStock = async (procedureId: string) => {

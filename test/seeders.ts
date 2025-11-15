@@ -54,7 +54,8 @@ export async function seedTestData(): Promise<SeededData> {
             email: 'worker@test.com',
             password: hashedPassword,
             phone: '+1234567891',
-            role: 'worker'
+            role: 'worker',
+            loyaltyTier: 'Worker'
         },
         {
             name: 'John Doe',
@@ -63,7 +64,7 @@ export async function seedTestData(): Promise<SeededData> {
             phone: '+1234567892',
             role: 'client',
             loyaltyTier: 'Bronze',
-            loyaltyPoints: 50
+            visitsCount: 12
         },
         {
             name: 'Jane Smith',
@@ -72,7 +73,7 @@ export async function seedTestData(): Promise<SeededData> {
             phone: '+1234567893',
             role: 'client',
             loyaltyTier: 'Silver',
-            loyaltyPoints: 150
+            visitsCount: 30
         },
         {
             name: 'Bob Johnson',
@@ -81,7 +82,7 @@ export async function seedTestData(): Promise<SeededData> {
             phone: '+1234567894',
             role: 'client',
             loyaltyTier: 'Gold',
-            loyaltyPoints: 350
+            visitsCount: 55
         }
     ])
 
@@ -153,48 +154,53 @@ export async function seedTestData(): Promise<SeededData> {
     const bookings = await Booking.create([
         {
             clientId: client1._id,
-            providerName: 'Dr. Sarah Chen',
+            workerId: worker._id,
             procedureId: facialTreatment._id,
-            startsAt: new Date('2025-12-15T10:00:00Z'),
-            endsAt: new Date('2025-12-15T11:00:00Z'),
+            startsAt: new Date('2025-12-16T10:00:00Z'),
+            endsAt: new Date('2025-12-16T11:00:00Z'),
             status: 'confirmed',
-            paymentType: 'card'
+            paymentType: 'card',
+            finalPrice: 120 * 0.95 // Bronze discount 5%
         },
         {
             clientId: client1._id,
-            providerName: 'Dr. Michael Brown',
+            workerId: worker._id,
             procedureId: botoxInjection._id,
-            startsAt: new Date('2025-12-16T14:00:00Z'),
-            endsAt: new Date('2025-12-16T14:30:00Z'),
+            startsAt: new Date('2025-12-17T14:00:00Z'),
+            endsAt: new Date('2025-12-17T14:30:00Z'),
             status: 'held',
-            paymentType: 'cash'
+            paymentType: 'cash',
+            finalPrice: 300 * 0.95 // Bronze discount 5%
         },
         {
             clientId: client2._id,
-            providerName: 'Dr. Sarah Chen',
+            workerId: worker._id,
             procedureId: laserTherapy._id,
-            startsAt: new Date('2025-12-17T09:00:00Z'),
-            endsAt: new Date('2025-12-17T09:45:00Z'),
+            startsAt: new Date('2025-12-18T09:00:00Z'),
+            endsAt: new Date('2025-12-18T09:45:00Z'),
             status: 'fulfilled',
-            paymentType: 'card'
+            paymentType: 'card',
+            finalPrice: 200 * 0.9 // Silver discount 10%
         },
         {
             clientId: client2._id,
-            providerName: 'Dr. Emily White',
+            workerId: worker._id,
             procedureId: chemicalPeel._id,
-            startsAt: new Date('2025-12-18T13:00:00Z'),
-            endsAt: new Date('2025-12-18T14:30:00Z'),
+            startsAt: new Date('2025-12-19T13:00:00Z'),
+            endsAt: new Date('2025-12-19T14:30:00Z'),
             status: 'confirmed',
-            paymentType: 'deposit'
+            paymentType: 'deposit',
+            finalPrice: 180 * 0.9 // Silver discount 10%
         },
         {
             clientId: client3._id,
-            providerName: 'Dr. Michael Brown',
+            workerId: worker._id,
             procedureId: facialTreatment._id,
             startsAt: new Date('2025-12-20T11:00:00Z'),
             endsAt: new Date('2025-12-20T12:00:00Z'),
             status: 'cancelled',
-            paymentType: 'card'
+            paymentType: 'card',
+            finalPrice: 120 * 0.8 // Gold discount 20%
         }
     ])
 

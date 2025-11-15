@@ -14,6 +14,12 @@ export const updateClientSchema = z.object({
     phone: z.string().optional()
 })
 
+export const updateLoyaltySchema = z.object({
+    loyaltyTier: z.enum(['Bronze', 'Silver', 'Gold', 'Worker', ''], {
+        errorMap: () => ({ message: 'Loyalty tier must be one of: Bronze, Silver, Gold, Worker, or empty' })
+    })
+})
+
 // Material Schema
 export const createMaterialSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -57,7 +63,7 @@ export const bomSchema = z.array(
 // Booking Schema
 export const createBookingSchema = z.object({
     clientId: z.string().min(1, 'Client ID is required'),
-    providerName: z.string().min(1, 'Provider name is required'),
+    workerId: z.string().min(1, 'Worker ID is required'),
     procedureId: z.string().min(1, 'Procedure ID is required'),
     startsAt: z.string().datetime().or(z.date()),
     endsAt: z.string().datetime().or(z.date()),
@@ -67,11 +73,41 @@ export const createBookingSchema = z.object({
     paymentType: z.enum(['cash', 'card', 'deposit'], {
         errorMap: () => ({ message: 'Payment type must be one of: cash, card, deposit' })
     })
+}).refine((data) => {
+    const start = new Date(data.startsAt)
+    const end = new Date(data.endsAt)
+    
+    // Check day of week (0 = Sunday, 6 = Saturday)
+    const startDay = start.getDay()
+    const endDay = end.getDay()
+    
+    if (startDay === 0 || startDay === 6 || endDay === 0 || endDay === 6) {
+        return false
+    }
+    
+    // Check hours (08:00 - 20:00)
+    const startHour = start.getHours()
+    const endHour = end.getHours()
+    const endMinute = end.getMinutes()
+    
+    // Start must be >= 8:00
+    if (startHour < 8) {
+        return false
+    }
+    
+    // End must be <= 20:00
+    if (endHour > 20 || (endHour === 20 && endMinute > 0)) {
+        return false
+    }
+    
+    return true
+}, {
+    message: 'Bookings are only allowed Monday-Friday between 08:00 and 20:00 (GMT+1)'
 })
 
 export const updateBookingSchema = z.object({
     clientId: z.string().min(1, 'Client ID is required').optional(),
-    providerName: z.string().min(1, 'Provider name is required').optional(),
+    workerId: z.string().min(1, 'Worker ID is required').optional(),
     procedureId: z.string().min(1, 'Procedure ID is required').optional(),
     startsAt: z.string().datetime().or(z.date()).optional(),
     endsAt: z.string().datetime().or(z.date()).optional(),

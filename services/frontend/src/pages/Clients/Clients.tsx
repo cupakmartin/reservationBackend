@@ -8,6 +8,7 @@ import Select from '../../components/ui/Select'
 import Modal from '../../components/ui/Modal'
 import { toast } from '../../components/ui/Toast'
 import { Plus, Edit, Trash2, Mail, Phone, Award, Filter, X } from 'lucide-react'
+import { useAuthStore } from '../../store/authStore'
 
 interface Client {
   _id: string
@@ -15,10 +16,12 @@ interface Client {
   email: string
   phone?: string
   role: string
-  loyaltyPoints: number
+  visitsCount: number
+  loyaltyTier: 'Bronze' | 'Silver' | 'Gold' | 'Worker' | null
 }
 
 export default function Clients() {
+  const { user } = useAuthStore()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -29,7 +32,7 @@ export default function Clients() {
   const [filters, setFilters] = useState({
     name: '',
     role: '',
-    loyaltyPoints: '',
+    visitsCount: '',
     dateFrom: '',
     dateTo: '',
     sortBy: 'name',
@@ -42,6 +45,7 @@ export default function Clients() {
     phone: '',
     role: 'client',
     password: '',
+    loyaltyTier: '' as string,
   })
 
   const fetchClients = async () => {
@@ -49,7 +53,7 @@ export default function Clients() {
       const params = new URLSearchParams()
       if (filters.name) params.append('name', filters.name)
       if (filters.role) params.append('role', filters.role)
-      if (filters.loyaltyPoints) params.append('loyaltyPoints', filters.loyaltyPoints)
+      if (filters.visitsCount) params.append('visitsCount', filters.visitsCount)
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
       if (filters.dateTo) params.append('dateTo', filters.dateTo)
       if (filters.sortBy) params.append('sortBy', filters.sortBy)
@@ -79,10 +83,11 @@ export default function Clients() {
         phone: client.phone || '',
         role: client.role,
         password: '',
+        loyaltyTier: client.loyaltyTier || '',
       })
     } else {
       setEditingClient(null)
-      setFormData({ name: '', email: '', phone: '', role: 'client', password: '' })
+      setFormData({ name: '', email: '', phone: '', role: 'client', password: '', loyaltyTier: '' })
     }
     setShowModal(true)
   }
@@ -90,7 +95,7 @@ export default function Clients() {
   const handleCloseModal = () => {
     setShowModal(false)
     setEditingClient(null)
-    setFormData({ name: '', email: '', phone: '', role: 'client', password: '' })
+    setFormData({ name: '', email: '', phone: '', role: 'client', password: '', loyaltyTier: '' })
   }
 
   const handleSubmit = async () => {
@@ -119,8 +124,12 @@ export default function Clients() {
       }
 
       if (editingClient) {
-        await api.patch(`/clients/${editingClient._id}`, data)
-        toast('success', 'Client updated successfully!')
+        await api.put(`/clients/${editingClient._id}`, data)
+        // Update loyalty tier separately if changed and user is admin
+        if (user?.role === 'admin' && formData.loyaltyTier !== editingClient.loyaltyTier) {
+          await api.patch(`/clients/${editingClient._id}/loyalty`, { loyaltyTier: formData.loyaltyTier || '' })
+        }
+        toast('success', 'Client updated successfully')
       } else {
         await api.post('/auth/register', data)
         toast('success', 'Client created successfully!')
@@ -153,7 +162,7 @@ export default function Clients() {
     setFilters({
       name: '',
       role: '',
-      loyaltyPoints: '',
+      visitsCount: '',
       dateFrom: '',
       dateTo: '',
       sortBy: 'name',
@@ -220,11 +229,11 @@ export default function Clients() {
                 ]}
               />
               <Input
-                label="Min Loyalty Points"
+                label="Min Visits"
                 type="number"
-                placeholder="Min points"
-                value={filters.loyaltyPoints}
-                onChange={(e) => setFilters({ ...filters, loyaltyPoints: e.target.value })}
+                placeholder="Min visits"
+                value={filters.visitsCount}
+                onChange={(e) => setFilters({ ...filters, visitsCount: e.target.value })}
               />
               <Input
                 label="Date From"
@@ -304,9 +313,14 @@ export default function Clients() {
                             {client.phone}
                           </div>
                         )}
-                        <div className="flex items-center text-green-600 font-semibold">
-                          <Award className="h-4 w-4 mr-2" />
-                          {client.loyaltyPoints} loyalty points
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center text-blue-600 font-semibold">
+                            <Award className="h-4 w-4 mr-2" />
+                            Tier: {client.loyaltyTier || 'N/A'}
+                          </div>
+                          <div className="text-gray-700 font-medium">
+                            Visits: {client.visitsCount}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -377,6 +391,21 @@ export default function Clients() {
               ]}
               required
             />
+
+            {editingClient && user?.role === 'admin' && (
+              <Select
+                label="Loyalty Tier (Admin Override)"
+                value={formData.loyaltyTier}
+                onChange={(e) => setFormData({ ...formData, loyaltyTier: e.target.value })}
+                options={[
+                  { value: '', label: 'No Tier' },
+                  { value: 'Bronze', label: 'Bronze' },
+                  { value: 'Silver', label: 'Silver' },
+                  { value: 'Gold', label: 'Gold' },
+                  { value: 'Worker', label: 'Worker' },
+                ]}
+              />
+            )}
 
             <Input
               label={editingClient ? 'Password (leave blank to keep current)' : 'Password'}

@@ -12,12 +12,34 @@ import { Calendar, Clock, User, Briefcase, DollarSign, Trash2 } from 'lucide-rea
 
 interface Booking {
   _id: string
-  clientId: { _id: string; name: string; email: string }
+  clientId: { _id: string; name: string; email: string; loyaltyTier?: string | null }
   procedureId: { _id: string; name: string; price: number; durationMin: number }
   startsAt: string
   endsAt: string
   status: string
+  previousStatus?: string
   loyaltyPointsEarned?: number
+  finalPrice: number
+}
+
+// Helper: Map backend status to display text
+const getStatusDisplayText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    held: 'Pending',
+    confirmed: 'Confirmed',
+    fulfilled: 'Completed',
+    cancelled: 'Cancelled'
+  }
+  return statusMap[status] || status
+}
+
+// Helper: Get available status transitions based on current status
+const getAvailableTransitions = (status: string): string[] => {
+  if (status === 'held') return ['confirmed', 'cancelled']
+  if (status === 'confirmed') return ['fulfilled', 'cancelled']
+  if (status === 'fulfilled') return ['cancelled']
+  if (status === 'cancelled') return ['held', 'confirmed']
+  return []
 }
 
 export default function Bookings() {
@@ -29,7 +51,9 @@ export default function Bookings() {
 
   const fetchBookings = async () => {
     try {
-      const { data } = await api.get('/bookings')
+      // Clients fetch their own bookings, workers/admins fetch all
+      const endpoint = user?.role === 'client' ? '/bookings/my-bookings' : '/bookings'
+      const { data } = await api.get(endpoint)
       setBookings(data)
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string } } }
@@ -41,7 +65,7 @@ export default function Bookings() {
 
   useEffect(() => {
     fetchBookings()
-  }, [])
+  }, [user?.role])
 
   useEffect(() => {
     if (lastEvent) {
@@ -51,7 +75,7 @@ export default function Bookings() {
 
   const handleStatusChange = async (bookingId: string, newStatus: string) => {
     try {
-      await api.patch(`/bookings/${bookingId}`, { status: newStatus })
+      await api.patch(`/bookings/${bookingId}/status/${newStatus}`)
       toast('success', 'Booking status updated!')
       fetchBookings()
     } catch (error: unknown) {
@@ -75,9 +99,9 @@ export default function Bookings() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+      case 'held': return 'bg-yellow-100 text-yellow-800 border-yellow-300'
       case 'confirmed': return 'bg-green-100 text-green-800 border-green-300'
-      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-300'
+      case 'fulfilled': return 'bg-blue-100 text-blue-800 border-blue-300'
       case 'cancelled': return 'bg-red-100 text-red-800 border-red-300'
       default: return 'bg-gray-100 text-gray-800 border-gray-300'
     }
@@ -111,9 +135,9 @@ export default function Bookings() {
                 onChange={(e) => setFilterStatus(e.target.value)}
                 options={[
                   { value: 'all', label: 'All Status' },
-                  { value: 'pending', label: 'Pending' },
+                  { value: 'held', label: 'Pending' },
                   { value: 'confirmed', label: 'Confirmed' },
-                  { value: 'completed', label: 'Completed' },
+                  { value: 'fulfilled', label: 'Completed' },
                   { value: 'cancelled', label: 'Cancelled' },
                 ]}
               />
@@ -163,7 +187,16 @@ export default function Bookings() {
                           <div className="font-semibold">{booking.procedureId?.name ?? 'N/A'}</div>
                           <div className="text-gray-500 flex items-center">
                             <DollarSign className="h-3 w-3" />
-                            {booking.procedureId?.price ?? 0} • {booking.procedureId?.durationMin ?? 0} min
+                            {booking.finalPrice ?? booking.procedureId?.price ?? 0}
+                            {booking.finalPrice && booking.procedureId?.price && booking.finalPrice < booking.procedureId.price && (
+                              <span className="ml-1 text-green-600 font-medium">
+                                ({Math.round((1 - booking.finalPrice / booking.procedureId.price) * 100)}% off)
+                              </span>
+                            )}
+                            {!booking.finalPrice && booking.procedureId?.price && (
+                              <span className="ml-1 line-through text-gray-400">{booking.procedureId.price}</span>
+                            )}
+                             • {booking.procedureId?.durationMin ?? 0} min
                           </div>
                         </div>
                       </div>
@@ -171,28 +204,39 @@ export default function Bookings() {
 
                     <div className="flex items-center gap-3 ml-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${getStatusColor(booking.status)}`}>
-                        {booking.status}
+                        {getStatusDisplayText(booking.status)}
                       </span>
 
-                      {(user?.role === 'worker' || user?.role === 'admin') && (
+                      {user?.role === 'client' ? (
+                        // Client view: only show cancel button for 'held' bookings
+                        booking.status === 'held' && (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => handleStatusChange(booking._id, 'cancelled')}
+                          >
+                            Cancel Booking
+                          </Button>
+                        )
+                      ) : (
+                        // Worker/Admin view: show status dropdown and delete button
                         <div className="flex gap-2">
-                          {booking.status === 'pending' && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleStatusChange(booking._id, 'confirmed')}
-                            >
-                              Confirm
-                            </Button>
-                          )}
-                          {booking.status === 'confirmed' && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleStatusChange(booking._id, 'completed')}
-                            >
-                              Complete
-                            </Button>
+                          {getAvailableTransitions(booking.status).length > 0 && (
+                            <Select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleStatusChange(booking._id, e.target.value)
+                                }
+                              }}
+                              options={[
+                                { value: '', label: 'Change Status' },
+                                ...getAvailableTransitions(booking.status).map(status => ({
+                                  value: status,
+                                  label: getStatusDisplayText(status)
+                                }))
+                              ]}
+                            />
                           )}
                           <Button
                             size="sm"

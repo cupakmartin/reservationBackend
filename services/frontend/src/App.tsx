@@ -12,6 +12,7 @@ import Register from './pages/Auth/Register'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Calendar from './pages/Calendar/Calendar'
 import Bookings from './pages/Bookings/Bookings'
+import MySchedule from './pages/MySchedule/MySchedule'
 import Procedures from './pages/Procedures/Procedures'
 import Clients from './pages/Clients/Clients'
 import Materials from './pages/Materials/Materials'
@@ -40,6 +41,7 @@ function App() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/calendar" element={<Calendar />} />
                     <Route path="/bookings" element={<Bookings />} />
+                    <Route path="/my-schedule" element={<MySchedule />} />
                     <Route path="/procedures" element={<Procedures />} />
                     <Route path="/clients" element={<Clients />} />
                     <Route path="/materials" element={<Materials />} />

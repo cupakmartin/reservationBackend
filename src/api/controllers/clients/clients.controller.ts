@@ -6,7 +6,7 @@ import mongoose from 'mongoose'
 interface QueryFilter {
     name?: { $regex: string; $options: string }
     role?: string
-    loyaltyPoints?: { $gte: number }
+    visitsCount?: { $gte: number }
     createdAt?: { $gte?: Date; $lte?: Date }
 }
 
@@ -21,8 +21,8 @@ const buildClientFilter = (query: any): QueryFilter => {
         filter.role = query.role
     }
     
-    if (query.loyaltyPoints) {
-        filter.loyaltyPoints = { $gte: parseFloat(query.loyaltyPoints) }
+    if (query.visitsCount) {
+        filter.visitsCount = { $gte: parseFloat(query.visitsCount) }
     }
     
     if (query.dateFrom || query.dateTo) {
@@ -135,3 +135,41 @@ export const deleteClient = async (req: AuthRequest, res: Response, next: NextFu
         next(error)
     }
 }
+
+export const updateClientLoyalty = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params
+        const { loyaltyTier } = req.body
+        
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(404).json({ error: 'Client not found' })
+        }
+        
+        // Convert empty string to null
+        const tierValue = loyaltyTier === '' ? null : loyaltyTier
+        
+        const client = await Client.findByIdAndUpdate(
+            id,
+            { $set: { loyaltyTier: tierValue } },
+            { new: true, runValidators: true }
+        )
+        
+        if (!client) {
+            return res.status(404).json({ error: 'Client not found' })
+        }
+        
+        res.json(client)
+    } catch (error) {
+        next(error)
+    }
+}
+
+export const getWorkers = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const workers = await Client.find({ role: 'worker' }).select('_id name')
+        res.json(workers)
+    } catch (error) {
+        next(error)
+    }
+}
+

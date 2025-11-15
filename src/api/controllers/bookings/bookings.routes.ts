@@ -8,13 +8,17 @@ import {
     updateBooking,
     deleteBooking,
     updateBookingStatus,
-    getCalendar
+    getCalendar,
+    getWorkerSchedule,
+    getClientBookings
 } from './bookings.controller'
 
 const router = Router()
 
-// Workers and admins can view all bookings, clients see filtered results in controller
-router.get('/', authenticate, getAllBookings)
+// Admin only - view all bookings
+router.get('/', authenticate, checkRole(['admin']), getAllBookings)
+router.get('/my-schedule', authenticate, checkRole(['worker']), getWorkerSchedule)
+router.get('/my-bookings', authenticate, getClientBookings)
 router.get('/calendar', authenticate, getCalendar)
 router.get('/:id', authenticate, getBookingById)
 
@@ -24,10 +28,10 @@ router.post('/', authenticate, validate(createBookingSchema), createBooking)
 // Clients can update their own bookings, workers/admins can update any
 router.put('/:id', authenticate, validate(updateBookingSchema), updateBooking)
 
-// Only admins can delete bookings
-router.delete('/:id', authenticate, checkRole(['admin']), deleteBooking)
+// Workers and admins can delete bookings
+router.delete('/:id', authenticate, checkRole(['admin', 'worker']), deleteBooking)
 
-// Workers and admins can update booking status
-router.patch('/:id/status/:newStatus', authenticate, checkRole(['worker', 'admin']), updateBookingStatus)
+// All authenticated users can update booking status (with role restrictions in controller)
+router.patch('/:id/status/:newStatus', authenticate, updateBookingStatus)
 
 export default router

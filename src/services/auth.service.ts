@@ -44,13 +44,20 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     
-    const user = await Client.create({
+    const clientData: any = {
       name: data.name,
       email: data.email,
       phone: data.phone,
       password: hashedPassword,
       role: data.role || 'client'
-    });
+    };
+    
+    // Set Worker tier for worker accounts
+    if (clientData.role === 'worker') {
+      clientData.loyaltyTier = 'Worker';
+    }
+    
+    const user = await Client.create(clientData);
 
     const tokens = this.generateTokens(user);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
@@ -94,6 +101,10 @@ export class AuthService {
 
   verifyAccessToken(token: string): TokenPayload {
     return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  }
+
+  async getUserById(userId: string): Promise<IClient | null> {
+    return await Client.findById(userId).select('+password');
   }
 
   private generateTokens(user: IClient): AuthTokens {

@@ -2,6 +2,9 @@
 import dotenv from 'dotenv'
 dotenv.config()
 
+// Set timezone to GMT+1 (CET) for all Date operations
+process.env.TZ = 'Europe/Prague'
+
 import mongoose from 'mongoose'
 import { createApp } from './app'
 import { createServer } from 'http'

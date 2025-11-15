@@ -7,9 +7,8 @@ export interface IClient extends Document {
   password?: string;
   role: 'client' | 'worker' | 'admin';
   refreshToken?: string;
-  loyaltyPoints: number;
-  visitsCount?: number;
-  loyaltyTier?: string;
+  visitsCount: number;
+  loyaltyTier: 'Bronze' | 'Silver' | 'Gold' | 'Worker' | null;
   createdAt: Date;
 }
 
@@ -24,9 +23,12 @@ const ClientSchema: Schema = new Schema({
     default: 'client' 
   },
   refreshToken: { type: String, select: false },
-  loyaltyPoints: { type: Number, default: 0 },
   visitsCount: { type: Number, default: 0 },
-  loyaltyTier: { type: String, required: false },
+  loyaltyTier: { 
+    type: String, 
+    enum: ['Bronze', 'Silver', 'Gold', 'Worker', null], 
+    default: null 
+  },
   createdAt: { type: Date, default: Date.now }
 });
 
