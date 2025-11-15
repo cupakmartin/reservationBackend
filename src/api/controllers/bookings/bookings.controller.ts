@@ -11,13 +11,119 @@ import mongoose from 'mongoose'
 
 export const getAllBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // Admin only - see all bookings
-        const bookings = await Booking.find()
+        const { date, clientName, workerName, dateFrom, dateTo, sortBy = 'createdAt', order = 'desc' } = req.query;
+        
+        // Build filter query
+        const filter: Record<string, unknown> = {};
+        
+        // If date is provided, allow all authenticated users to see bookings for that date
+        if (date) {
+            const dateStr = String(date);
+            const startOfDay = new Date(dateStr);
+            const endOfDay = new Date(dateStr);
+            endOfDay.setHours(23, 59, 59, 999);
+            
+            filter.startsAt = {
+                $gte: startOfDay,
+                $lte: endOfDay
+            };
+        } else {
+            // Date range filtering
+            if (dateFrom || dateTo) {
+                filter.startsAt = {};
+                if (dateFrom) {
+                    (filter.startsAt as Record<string, Date>).$gte = new Date(String(dateFrom));
+                }
+                if (dateTo) {
+                    const endDate = new Date(String(dateTo));
+                    endDate.setHours(23, 59, 59, 999);
+                    (filter.startsAt as Record<string, Date>).$lte = endDate;
+                }
+            }
+        }
+        
+        // Get bookings with filter
+        let bookingsQuery = Booking.find(filter)
             .populate('clientId')
             .populate('workerId')
-            .populate('procedureId')
-            .sort({ createdAt: -1 })
-            .limit(50);
+            .populate('procedureId');
+        
+        // Apply client name filter
+        if (clientName) {
+            const clients = await Client.find({
+                name: { $regex: String(clientName), $options: 'i' }
+            }).select('_id');
+            const clientIds = clients.map(c => c._id);
+            bookingsQuery = bookingsQuery.where('clientId').in(clientIds);
+        }
+        
+        // Apply worker name filter
+        if (workerName) {
+            const workers = await Client.find({
+                name: { $regex: String(workerName), $options: 'i' },
+                role: 'worker'
+            }).select('_id');
+            const workerIds = workers.map(w => w._id);
+            bookingsQuery = bookingsQuery.where('workerId').in(workerIds);
+        }
+        
+        // Handle sorting
+        let sortOption: Record<string, 1 | -1> = {};
+        const sortOrder = order === 'asc' ? 1 : -1;
+        
+        switch (sortBy) {
+            case 'clientName':
+                // Will sort after population
+                break;
+            case 'workerName':
+                // Will sort after population
+                break;
+            case 'price':
+                sortOption = { finalPrice: sortOrder };
+                break;
+            case 'duration':
+                // Will sort after population based on procedure duration
+                break;
+            case 'createdAt':
+                sortOption = { createdAt: sortOrder };
+                break;
+            case 'startsAt':
+            default:
+                sortOption = { startsAt: sortOrder };
+                break;
+        }
+        
+        if (Object.keys(sortOption).length > 0) {
+            bookingsQuery = bookingsQuery.sort(sortOption);
+        }
+        
+        // Apply limit only when not filtering by specific date
+        if (!date) {
+            bookingsQuery = bookingsQuery.limit(500);
+        }
+        
+        let bookings = await bookingsQuery.exec();
+        
+        // Post-query sorting for populated fields
+        if (sortBy === 'clientName') {
+            bookings = bookings.sort((a, b) => {
+                const nameA = (a.clientId as any)?.name?.toLowerCase() || '';
+                const nameB = (b.clientId as any)?.name?.toLowerCase() || '';
+                return sortOrder === 1 ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+        } else if (sortBy === 'workerName') {
+            bookings = bookings.sort((a, b) => {
+                const nameA = (a.workerId as any)?.name?.toLowerCase() || '';
+                const nameB = (b.workerId as any)?.name?.toLowerCase() || '';
+                return sortOrder === 1 ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+        } else if (sortBy === 'duration') {
+            bookings = bookings.sort((a, b) => {
+                const durA = (a.procedureId as any)?.durationMin || 0;
+                const durB = (b.procedureId as any)?.durationMin || 0;
+                return sortOrder === 1 ? durA - durB : durB - durA;
+            });
+        }
         
         res.json(bookings);
     } catch (error) {
@@ -29,6 +135,7 @@ export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: N
     try {
         const bookings = await Booking.find({ workerId: req.user?.userId })
             .populate('clientId')
+            .populate('workerId', 'name')
             .populate('procedureId')
             .sort({ startsAt: 1 });
         
@@ -41,7 +148,8 @@ export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: N
 export const getClientBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const bookings = await Booking.find({ clientId: req.user?.userId })
-            .populate('workerId')
+            .populate('clientId', 'name')
+            .populate('workerId', 'name')
             .populate('procedureId')
             .sort({ startsAt: -1 });
         
@@ -49,6 +157,175 @@ export const getClientBookings = async (req: AuthRequest, res: Response, next: N
     } catch (error) {
         next(error);
     }
+}
+
+export const getWorkerScheduleForDay = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const { workerId } = req.params;
+        const { date } = req.query;
+        
+        if (!date) {
+            return res.status(400).json({ error: 'Date query parameter is required' });
+        }
+        
+        if (!mongoose.Types.ObjectId.isValid(workerId)) {
+            return res.status(404).json({ error: 'Worker not found' });
+        }
+        
+        // Construct date range for the specified day in GMT+1
+        const dateStr = String(date);
+        const startOfDay = new Date(dateStr);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(dateStr);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        // Find all bookings for this worker on this day
+        const bookings = await Booking.find({
+            workerId,
+            startsAt: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            }
+        })
+            .select('startsAt endsAt')
+            .sort({ startsAt: 1 });
+        
+        // Return simplified schedule array
+        const schedule = bookings.map(booking => ({
+            startsAt: booking.startsAt,
+            endsAt: booking.endsAt
+        }));
+        
+        res.json(schedule);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getMonthlyAvailability = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const { year, month } = req.params;
+        const yearNum = parseInt(year);
+        const monthNum = parseInt(month) - 1; // JavaScript months are 0-indexed
+        
+        if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 0 || monthNum > 11) {
+            return res.status(400).json({ error: 'Invalid year or month' });
+        }
+        
+        // Get all procedures to find minimum duration
+        const procedures = await Procedure.find();
+        if (procedures.length === 0) {
+            return res.json([]);
+        }
+        
+        const minDuration = Math.min(...procedures.map(p => p.durationMin));
+        
+        // Get all workers
+        const workers = await Client.find({ role: 'worker' });
+        if (workers.length === 0) {
+            return res.json([]);
+        }
+        
+        const workerIds = workers.map(w => w._id as mongoose.Types.ObjectId);
+        
+        // Operating hours: 8:00 to 20:00
+        const openingHour = 8;
+        const closingHour = 20;
+        const operatingMinutes = (closingHour - openingHour) * 60;
+        
+        // Calculate first and last day of the month
+        const firstDay = new Date(yearNum, monthNum, 1);
+        const lastDay = new Date(yearNum, monthNum + 1, 0);
+        
+        const fullyBookedDays: string[] = [];
+        
+        // Check each day of the month
+        for (let day = 1; day <= lastDay.getDate(); day++) {
+            const currentDate = new Date(yearNum, monthNum, day);
+            const dayOfWeek = currentDate.getDay();
+            
+            // Skip weekends (0 = Sunday, 6 = Saturday)
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                continue;
+            }
+            
+            // Check if day is fully booked
+            const isFullyBooked = await isDayFullyBooked(
+                currentDate,
+                workerIds,
+                minDuration,
+                operatingMinutes
+            );
+            
+            if (isFullyBooked) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                console.log(`[Availability] Day ${dateStr} is fully booked`);
+                fullyBookedDays.push(dateStr);
+            }
+        }
+        
+        console.log(`[Availability] Fully booked days for ${year}-${month}:`, fullyBookedDays);
+        res.json(fullyBookedDays);
+    } catch (error) {
+        next(error);
+    }
+}
+
+const isDayFullyBooked = async (
+    date: Date,
+    workerIds: mongoose.Types.ObjectId[],
+    minDuration: number,
+    operatingMinutes: number
+): Promise<boolean> => {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Get all bookings for this day
+    const bookings = await Booking.find({
+        startsAt: {
+            $gte: startOfDay,
+            $lte: endOfDay
+        }
+    }).sort({ startsAt: 1 });
+    
+    console.log(`[isDayFullyBooked] Checking ${date.toISOString().split('T')[0]}, found ${bookings.length} bookings`);
+    
+    // Calculate total booked minutes per worker
+    const workerBookedMinutes = new Map<string, number>();
+    
+    for (const workerId of workerIds) {
+        const workerBookings = bookings.filter(
+            b => b.workerId.toString() === workerId.toString()
+        );
+        
+        let totalMinutes = 0;
+        for (const booking of workerBookings) {
+            const duration = (booking.endsAt.getTime() - booking.startsAt.getTime()) / (1000 * 60);
+            totalMinutes += duration;
+        }
+        
+        console.log(`[isDayFullyBooked] Worker ${workerId}: ${totalMinutes}/${operatingMinutes} minutes booked`);
+        
+        workerBookedMinutes.set(workerId.toString(), totalMinutes);
+    }
+    
+    // Check if all workers are fully booked (no slot for min duration)
+    // Check if ALL workers are fully booked for the entire day
+    for (const workerId of workerIds) {
+        const bookedMinutes = workerBookedMinutes.get(workerId.toString()) || 0;
+        const availableMinutes = operatingMinutes - bookedMinutes;
+        
+        // If any worker has availability, day is not fully booked
+        if (availableMinutes >= minDuration) {
+            console.log(`[isDayFullyBooked] Worker ${workerId} still has ${availableMinutes} minutes available`);
+            return false;
+        }
+    }
+    
+    console.log(`[isDayFullyBooked] All workers fully booked - day is fully booked`);
+    return true; // All workers are fully booked for entire operating hours
 }
 
 export const getBookingById = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -74,6 +351,34 @@ export const getBookingById = async (req: AuthRequest, res: Response, next: Next
     }
 }
 
+// Helper function to check for overlapping bookings
+const hasOverlappingBooking = async (
+    workerId: string,
+    startsAt: Date,
+    endsAt: Date,
+    excludeBookingId?: string
+): Promise<boolean> => {
+    const query: any = {
+        workerId,
+        $or: [
+            // New booking starts during an existing booking
+            { startsAt: { $lte: startsAt }, endsAt: { $gt: startsAt } },
+            // New booking ends during an existing booking
+            { startsAt: { $lt: endsAt }, endsAt: { $gte: endsAt } },
+            // New booking completely contains an existing booking
+            { startsAt: { $gte: startsAt }, endsAt: { $lte: endsAt } }
+        ]
+    };
+
+    // Exclude current booking when updating
+    if (excludeBookingId) {
+        query._id = { $ne: excludeBookingId };
+    }
+
+    const overlappingBooking = await Booking.findOne(query);
+    return !!overlappingBooking;
+};
+
 export const createBooking = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         // If the user is a client, force the booking to be for themselves
@@ -88,6 +393,22 @@ export const createBooking = async (req: AuthRequest, res: Response, next: NextF
         const procedure = await Procedure.findById(req.body.procedureId)
         if (!procedure) {
             return res.status(404).json({ error: 'Procedure not found' })
+        }
+
+        // Check for overlapping bookings for the worker
+        const startsAt = new Date(req.body.startsAt);
+        const endsAt = new Date(req.body.endsAt);
+        
+        const hasOverlap = await hasOverlappingBooking(
+            req.body.workerId,
+            startsAt,
+            endsAt
+        );
+
+        if (hasOverlap) {
+            return res.status(409).json({ 
+                error: 'Worker already has a booking during this time slot. Please choose a different time or worker.' 
+            });
         }
         
         // Calculate discount based on loyalty tier
@@ -142,6 +463,26 @@ export const updateBooking = async (req: AuthRequest, res: Response, next: NextF
             // Clients cannot change the clientId or status
             delete req.body.clientId;
             delete req.body.status;
+        }
+
+        // Check for overlapping bookings if time or worker is being changed
+        if (req.body.startsAt || req.body.endsAt || req.body.workerId) {
+            const startsAt = req.body.startsAt ? new Date(req.body.startsAt) : existingBooking.startsAt;
+            const endsAt = req.body.endsAt ? new Date(req.body.endsAt) : existingBooking.endsAt;
+            const workerId = req.body.workerId || existingBooking.workerId.toString();
+
+            const hasOverlap = await hasOverlappingBooking(
+                workerId,
+                startsAt,
+                endsAt,
+                req.params.id
+            );
+
+            if (hasOverlap) {
+                return res.status(409).json({ 
+                    error: 'Worker already has a booking during this time slot. Please choose a different time or worker.' 
+                });
+            }
         }
         
         const booking = await Booking.findByIdAndUpdate(

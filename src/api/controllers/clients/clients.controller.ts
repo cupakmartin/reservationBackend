@@ -145,20 +145,26 @@ export const updateClientLoyalty = async (req: AuthRequest, res: Response, next:
             return res.status(404).json({ error: 'Client not found' })
         }
         
-        // Convert empty string to null
-        const tierValue = loyaltyTier === '' ? null : loyaltyTier
-        
-        const client = await Client.findByIdAndUpdate(
-            id,
-            { $set: { loyaltyTier: tierValue } },
-            { new: true, runValidators: true }
-        )
-        
+        // Check if user is a worker
+        const client = await Client.findById(id)
         if (!client) {
             return res.status(404).json({ error: 'Client not found' })
         }
         
-        res.json(client)
+        if (client.role === 'worker') {
+            return res.status(403).json({ error: 'Cannot change loyalty tier for workers' })
+        }
+        
+        // Convert empty string to null
+        const tierValue = loyaltyTier === '' ? null : loyaltyTier
+        
+        const updatedClient = await Client.findByIdAndUpdate(
+            id,
+            { $set: { loyaltyTier: tierValue, manualLoyaltyTier: true } },
+            { new: true, runValidators: true }
+        )
+        
+        res.json(updatedClient)
     } catch (error) {
         next(error)
     }

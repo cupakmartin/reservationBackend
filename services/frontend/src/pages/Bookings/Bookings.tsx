@@ -6,13 +6,15 @@ import api from '../../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
+import Input from '../../components/ui/Input'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
-import { Calendar, Clock, User, Briefcase, DollarSign, Trash2 } from 'lucide-react'
+import { Calendar, Clock, User, Briefcase, DollarSign, Trash2, Filter, X } from 'lucide-react'
 
 interface Booking {
   _id: string
   clientId: { _id: string; name: string; email: string; loyaltyTier?: string | null }
+  workerId?: { _id: string; name: string }
   procedureId: { _id: string; name: string; price: number; durationMin: number }
   startsAt: string
   endsAt: string
@@ -48,12 +50,33 @@ export default function Bookings() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
+  const [showFilters, setShowFilters] = useState(false)
+  
+  const [filters, setFilters] = useState({
+    clientName: '',
+    workerName: '',
+    dateFrom: '',
+    dateTo: '',
+    sortBy: 'startsAt',
+    order: 'desc',
+  })
 
   const fetchBookings = async () => {
     try {
-      // Clients fetch their own bookings, workers/admins fetch all
-      const endpoint = user?.role === 'client' ? '/bookings/my-bookings' : '/bookings'
-      const { data } = await api.get(endpoint)
+      // Admin fetches all bookings, clients and workers fetch their own
+      const endpoint = user?.role === 'admin' ? '/bookings' : '/bookings/my-bookings'
+      
+      // Build query params for filtering and sorting
+      const params = new URLSearchParams()
+      if (filters.clientName) params.append('clientName', filters.clientName)
+      if (filters.workerName) params.append('workerName', filters.workerName)
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
+      if (filters.dateTo) params.append('dateTo', filters.dateTo)
+      if (filters.sortBy) params.append('sortBy', filters.sortBy)
+      if (filters.order) params.append('order', filters.order)
+      
+      const queryString = params.toString()
+      const { data } = await api.get(`${endpoint}${queryString ? `?${queryString}` : ''}`)
       setBookings(data)
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error?: string } } }
@@ -65,7 +88,7 @@ export default function Bookings() {
 
   useEffect(() => {
     fetchBookings()
-  }, [user?.role])
+  }, [user?.role, filters])
 
   useEffect(() => {
     if (lastEvent) {
@@ -111,6 +134,20 @@ export default function Bookings() {
     ? bookings 
     : bookings.filter(b => b.status === filterStatus)
 
+  const clearFilters = () => {
+    setFilters({
+      clientName: '',
+      workerName: '',
+      dateFrom: '',
+      dateTo: '',
+      sortBy: 'startsAt',
+      order: 'desc',
+    })
+  }
+
+  const hasActiveFilters = filters.clientName || filters.workerName || filters.dateFrom || filters.dateTo || 
+    filters.sortBy !== 'startsAt' || filters.order !== 'desc'
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -123,7 +160,90 @@ export default function Bookings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Bookings</h1>
+        <Button 
+          variant="secondary" 
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <Filter className="h-4 w-4 mr-2" />
+          {showFilters ? 'Hide Filters' : 'Show Filters'}
+          {hasActiveFilters && (
+            <span className="ml-2 bg-blue-600 text-white text-xs rounded-full px-2 py-0.5">
+              Active
+            </span>
+          )}
+        </Button>
       </div>
+
+      {showFilters && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Filters & Sorting</CardTitle>
+              {hasActiveFilters && (
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Input
+                label="Client Name"
+                placeholder="Search by client name..."
+                value={filters.clientName}
+                onChange={(e) => setFilters({ ...filters, clientName: e.target.value })}
+              />
+              
+              <Input
+                label="Worker Name"
+                placeholder="Search by worker name..."
+                value={filters.workerName}
+                onChange={(e) => setFilters({ ...filters, workerName: e.target.value })}
+              />
+
+              <Input
+                label="Date From"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              />
+
+              <Input
+                label="Date To"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+
+              <Select
+                label="Sort By"
+                value={filters.sortBy}
+                onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                options={[
+                  { value: 'startsAt', label: 'Booking Date' },
+                  { value: 'createdAt', label: 'Date Created' },
+                  { value: 'clientName', label: 'Client Name' },
+                  { value: 'workerName', label: 'Worker Name' },
+                  { value: 'price', label: 'Price' },
+                  { value: 'duration', label: 'Duration' },
+                ]}
+              />
+
+              <Select
+                label="Order"
+                value={filters.order}
+                onChange={(e) => setFilters({ ...filters, order: e.target.value })}
+                options={[
+                  { value: 'asc', label: 'Ascending' },
+                  { value: 'desc', label: 'Descending' },
+                ]}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -153,10 +273,12 @@ export default function Bookings() {
             <div className="space-y-4">
               {filteredBookings.map(booking => (
                 <div key={booking._id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="flex items-center gap-6">
+                    <div className={`flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 ${
+                      user?.role === 'client' ? 'lg:grid-cols-4' : 'lg:grid-cols-5'
+                    }`}>
                       <div className="flex items-center text-sm">
-                        <Calendar className="h-4 w-4 mr-2 text-gray-500" />
+                        <Calendar className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
                         <div>
                           <div className="font-semibold">
                             {booking.startsAt ? format(new Date(booking.startsAt), 'MMM d, yyyy') : 'N/A'}
@@ -165,7 +287,7 @@ export default function Bookings() {
                       </div>
 
                       <div className="flex items-center text-sm">
-                        <Clock className="h-4 w-4 mr-2 text-gray-500" />
+                        <Clock className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
                         <div>
                           <div className="font-semibold">
                             {booking.startsAt ? format(new Date(booking.startsAt), 'HH:mm') : 'N/A'}
@@ -173,16 +295,38 @@ export default function Bookings() {
                         </div>
                       </div>
 
-                      <div className="flex items-center text-sm">
-                        <User className="h-4 w-4 mr-2 text-gray-500" />
-                        <div>
-                          <div className="font-semibold">{booking.clientId?.name ?? 'N/A'}</div>
-                          <div className="text-gray-500">{booking.clientId?.email ?? 'N/A'}</div>
+                      {user?.role === 'admin' && (
+                        <div className="flex items-center text-sm">
+                          <User className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
+                          <div>
+                            <div className="font-semibold">{booking.clientId?.name ?? 'N/A'}</div>
+                            <div className="text-gray-500">{booking.clientId?.email ?? 'N/A'}</div>
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {user?.role === 'worker' && (
+                        <div className="flex items-center text-sm">
+                          <User className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
+                          <div>
+                            <div className="font-semibold">Client</div>
+                            <div className="text-gray-500">{booking.clientId?.name ?? 'N/A'}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {user?.role !== 'client' && (
+                        <div className="flex items-center text-sm">
+                          <User className="h-4 w-4 mr-2 text-blue-500 flex-shrink-0" />
+                          <div>
+                            <div className="font-semibold text-blue-600">Worker</div>
+                            <div className="text-gray-500">{booking.workerId?.name ?? 'Not Assigned'}</div>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="flex items-center text-sm">
-                        <Briefcase className="h-4 w-4 mr-2 text-gray-500" />
+                        <Briefcase className="h-4 w-4 mr-2 text-gray-500 flex-shrink-0" />
                         <div>
                           <div className="font-semibold">{booking.procedureId?.name ?? 'N/A'}</div>
                           <div className="text-gray-500 flex items-center">
@@ -202,25 +346,16 @@ export default function Bookings() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 ml-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap ${getStatusColor(booking.status)}`}>
+                    <div className={`flex items-center gap-2 flex-shrink-0 ${
+                      user?.role === 'client' || user?.role === 'worker' ? 'flex-col w-40' : 'min-w-fit'
+                    }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap w-24 text-center ${getStatusColor(booking.status)}`}>
                         {getStatusDisplayText(booking.status)}
                       </span>
 
-                      {user?.role === 'client' ? (
-                        // Client view: only show cancel button for 'held' bookings
-                        booking.status === 'held' && (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleStatusChange(booking._id, 'cancelled')}
-                          >
-                            Cancel Booking
-                          </Button>
-                        )
-                      ) : (
-                        // Worker/Admin view: show status dropdown and delete button
-                        <div className="flex gap-2">
+                      {user?.role === 'admin' ? (
+                        // Admin view: show status dropdown and delete button
+                        <>
                           {getAvailableTransitions(booking.status).length > 0 && (
                             <Select
                               value=""
@@ -245,7 +380,18 @@ export default function Bookings() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                        </div>
+                        </>
+                      ) : (
+                        // Client/Worker view: only show cancel button for 'held' bookings
+                        booking.status === 'held' && (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => handleStatusChange(booking._id, 'cancelled')}
+                          >
+                            Cancel Booking
+                          </Button>
+                        )
                       )}
                     </div>
                   </div>

@@ -30,8 +30,8 @@ export default function Login() {
       })
       toast('success', 'Welcome back!')
       navigate('/')
-    } catch (err: any) {
-      toast('error', err.response?.data?.error || 'Login failed')
+    } catch (error: any) {
+      toast('error', error.response?.data?.error || 'Invalid email or password')
     } finally {
       setLoading(false)
     }

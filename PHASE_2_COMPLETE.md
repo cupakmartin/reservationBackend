@@ -1,53 +1,198 @@
-# Phase 2 Implementation Complete
+# Phase 2 Implementation Complete ✅
 
 ## Summary
 
 Phase 2 has been successfully completed, implementing:
-1. **Mailing Service** - A dedicated microservice for email functionality
-2. **WebSocket Integration** - Real-time communication protocol for booking updates
-3. **Calendar REST Endpoint** - New endpoint for calendar view data
+1. **Worker Schedule Display** - Show specific worker's busy times in booking modal
+2. **Fully Booked Calendar Days** - Highlight and disable days with no availability
 
 ---
 
-## 1. Mailing Service (Microservice #2)
+## Backend Changes
 
-### Location
-`services/mailing-service/`
+### 1. New Endpoints Added
 
-### Purpose
-Decouples email functionality from the main Data API, fulfilling the "at least 4 distinct microservices" requirement.
+#### GET /bookings/schedule/:workerId?date=YYYY-MM-DD
+- Returns array of `{startsAt, endsAt}` for a worker's bookings on a specific day
+- Used by BookingModal to display when selected worker is busy
+- All authenticated users can access
 
-### Technical Implementation
+#### GET /bookings/availability/:year/:month
+- Calculates fully booked days for the specified month
+- Returns array of date strings in `YYYY-MM-DD` format
+- Logic: Day is fully booked when ALL workers have no availability for minimum procedure duration
+- All authenticated users can access
 
-**Dependencies:**
-- express
-- nodemailer
-- dotenv
-- cors
+### 2. Implementation Details
 
-**Configuration:**
-- Port: 4001 (default)
-- SMTP: Ethereal.email for testing
-- Credentials stored in `services/mailing-service/.env`
+**getWorkerScheduleForDay:**
+- Query bookings by workerId and date range (GMT+1)
+- Returns simplified schedule array with only startsAt and endsAt
+- Sorted by startsAt ascending
 
-**Endpoints:**
-- `POST /send-email` - Send email with to, subject, html parameters
-- `GET /health` - Health check
+**getMonthlyAvailability:**
+- Finds minimum procedure duration across all procedures
+- Gets all workers (role: 'worker')
+- Checks all workers' schedules for each weekday in month
+- Day is fully booked if all workers' available time < min procedure duration
+- Operating hours: 8:00-20:00 (12 hours = 720 minutes total)
+- Helper function: `isDayFullyBooked()` calculates booked minutes per worker
 
-**Integration:**
-- Main API uses `fetch()` to call mailing service
-- Environment variable: `MAILING_SERVICE_URL` (defaults to http://localhost:4001)
-- Graceful degradation: Email failures don't block booking operations
+---
 
-**Files Created:**
-- `services/mailing-service/package.json`
-- `services/mailing-service/index.js`
-- `services/mailing-service/.env`
-- `services/mailing-service/README.md`
-- `services/mailing-service/setup-ethereal.js`
+## Frontend Changes
 
-**Files Modified:**
-- `src/services/mailing.service.ts` - New client wrapper for mailing service
+### 1. BookingModal.tsx
+
+**Added:**
+- `workerSchedule` state to store selected worker's busy time slots
+- New useEffect to fetch worker schedule when `workerId` changes
+- "Worker is busy:" section displaying time slots in `HH:MM - HH:MM` format
+
+**Removed:**
+- `bookings` state and all booking display logic
+- Entire "Existing Bookings" section
+- Functions: `getBookingTime()`, `getClientName()`, `getProcedureName()`, `getProcedurePrice()`
+- Functions: `handleStatusChange()`, `handleDelete()`, `getStatusColor()`
+
+**Behavior:**
+- Schedule appears when worker is selected
+- Displays in 24-hour format (e.g., "08:30 - 10:00")
+- Empty when no worker selected or worker has no bookings
+- Automatically updates on worker selection change
+
+### 2. Calendar.tsx
+
+**Added:**
+- `fullyBookedDays` state (array of date strings)
+- Parallel fetch for availability data in `fetchCalendarData()`
+- `isFullyBooked()` helper function
+- Blue background styling for fully booked days (`bg-blue-500 text-white`)
+- "Fully booked" legend item
+
+**Modified:**
+- `handleDateClick()` prevents opening modal on fully booked days
+- Shows toast: "This day is fully booked" when clicking fully booked days
+- Day rendering applies disabled state for fully booked days
+- Fully booked takes precedence over "has bookings" styling
+
+**Styling Priority:**
+1. Fully booked (blue bg, white text, disabled)
+2. Weekend (red bg, disabled)
+3. Past dates (gray bg, disabled)
+4. Has bookings (light blue bg, hoverable)
+5. Default (white bg, hoverable)
+
+---
+
+## Features Delivered
+
+### ✅ Worker Schedule Display
+- Real-time display of selected worker's busy time slots
+- Format: "Worker is busy: 08:30 - 10:00"
+- Multiple entries if worker has multiple bookings
+- Uses 24-hour time format
+- Helps users avoid scheduling conflicts
+- Automatically updates when worker selection changes
+
+### ✅ Fully Booked Calendar Days
+- Visual indication (blue highlight) for days with NO availability
+- Days are non-interactive (disabled)
+- Prevents modal from opening on fully booked days
+- Toast notification explains why day cannot be selected
+- Recalculates automatically on month navigation
+- Based on minimum procedure duration
+
+---
+
+## API Routes Summary
+
+```typescript
+// Backend routes (bookings.routes.ts)
+router.get('/availability/:year/:month', authenticate, getMonthlyAvailability)
+router.get('/schedule/:workerId', authenticate, getWorkerScheduleForDay)
+```
+
+---
+
+## Technical Notes
+
+### Date Handling
+- All dates use GMT+1 timezone
+- Date ranges: Start of day (00:00:00.000) to end of day (23:59:59.999)
+- Calendar fetches availability on month navigation
+- Worker schedule fetches on date or worker change
+
+### Availability Calculation
+- Considers ALL workers with role 'worker'
+- Operating hours: 8:00-20:00 Monday-Friday
+- Calculates total booked minutes per worker
+- Day is fully booked if ALL workers have available_minutes < min_procedure_duration
+- Example: 30-minute minimum procedure + all workers booked 11.5+ hours = fully booked day
+
+### Performance Optimizations
+- Parallel API calls in Calendar (calendar data + availability)
+- Single query per worker in BookingModal
+- No over-fetching: Only fetches schedule for selected worker
+- Availability cached until month navigation
+
+---
+
+## Files Modified
+
+### Backend
+- `src/api/controllers/bookings/bookings.controller.ts`
+  - Added `getWorkerScheduleForDay()` function
+  - Added `getMonthlyAvailability()` function
+  - Added `isDayFullyBooked()` helper function
+  
+- `src/api/controllers/bookings/bookings.routes.ts`
+  - Added routes for new endpoints
+  - Imported new controller functions
+
+### Frontend
+- `services/frontend/src/pages/Calendar/BookingModal.tsx`
+  - Replaced booking list with worker schedule
+  - Added schedule fetching logic
+  - Simplified component by removing management features
+  
+- `services/frontend/src/pages/Calendar/Calendar.tsx`
+  - Added fully booked days feature
+  - Updated styling and legend
+  - Added availability fetching
+  - Updated click handlers
+
+---
+
+## Testing Checklist
+
+- [x] Backend endpoints compile without errors
+- [x] Frontend components compile without errors
+- [x] Worker schedule displays when worker selected
+- [x] Worker schedule updates when changing workers
+- [x] Fully booked days highlighted in blue
+- [x] Modal prevented from opening on fully booked days
+- [x] Toast message shown for fully booked days
+- [x] Legend updated with "Fully booked" indicator
+- [x] Availability recalculates on month navigation
+- [x] No TypeScript errors
+- [x] No compilation errors
+
+---
+
+## Phase 2 Status: ✅ COMPLETE
+
+All requested features have been successfully implemented:
+1. ✅ Worker schedule display in booking modal
+2. ✅ Fully booked calendar days with visual indicators
+
+The system now provides users with clear visibility into worker availability and prevents booking on fully booked days.
+
+---
+
+## Previous Phase 2 Implementation
+
+The original Phase 2 (mailing service, WebSocket, calendar endpoint) was completed previously and remains functional:
 - `src/api/controllers/bookings/bookings.controller.ts` - Updated to use new mailing client
 
 **Files Deleted:**

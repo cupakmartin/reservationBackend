@@ -74,35 +74,37 @@ export const createBookingSchema = z.object({
         errorMap: () => ({ message: 'Payment type must be one of: cash, card, deposit' })
     })
 }).refine((data) => {
-    const start = new Date(data.startsAt)
-    const end = new Date(data.endsAt)
-    
-    // Check day of week (0 = Sunday, 6 = Saturday)
-    const startDay = start.getDay()
-    const endDay = end.getDay()
-    
-    if (startDay === 0 || startDay === 6 || endDay === 0 || endDay === 6) {
-        return false
+    const startsAt = new Date(data.startsAt);
+    const endsAt = new Date(data.endsAt);
+
+    // Check Weekday (Mon-Fri)
+    const day = startsAt.getDay(); // Sunday is 0, Saturday is 6
+    if (day === 0 || day === 6) {
+        return false; // Fails on Sunday or Saturday
+    }
+
+    // Check Start Hour (must be 8:00 AM or later and before 20:00)
+    const startHour = startsAt.getHours();
+    if (startHour < 8 || startHour >= 20) {
+        return false; // Fails if before 8:00 AM or at/after 20:00
+    }
+
+    // Check End Hour (must be 8:00 PM or earlier)
+    // A booking *ending* at 20:00:00 is valid. A booking ending at 20:00:01 is not.
+    const endHour = endsAt.getHours();
+    const endMinutes = endsAt.getMinutes();
+    if (endHour > 20 || (endHour === 20 && endMinutes > 0)) {
+        return false; // Fails if after 20:00
     }
     
-    // Check hours (08:00 - 20:00)
-    const startHour = start.getHours()
-    const endHour = end.getHours()
-    const endMinute = end.getMinutes()
-    
-    // Start must be >= 8:00
-    if (startHour < 8) {
-        return false
+    // Check that end time is after start time
+    if (endsAt <= startsAt) {
+        return false;
     }
-    
-    // End must be <= 20:00
-    if (endHour > 20 || (endHour === 20 && endMinute > 0)) {
-        return false
-    }
-    
-    return true
+
+    return true;
 }, {
-    message: 'Bookings are only allowed Monday-Friday between 08:00 and 20:00 (GMT+1)'
+    message: "Bookings must be within 8:00 - 20:00, Monday to Friday.",
 })
 
 export const updateBookingSchema = z.object({

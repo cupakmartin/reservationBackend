@@ -17,6 +17,7 @@ interface BookedDate {
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [bookedDates, setBookedDates] = useState<BookedDate[]>([])
+  const [fullyBookedDays, setFullyBookedDays] = useState<string[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -26,14 +27,21 @@ export default function Calendar() {
     try {
       const month = currentDate.getMonth() + 1
       const year = currentDate.getFullYear()
-      const { data } = await api.get(`/bookings/calendar?month=${month}&year=${year}`)
+      const [calendarData, availabilityData] = await Promise.all([
+        api.get(`/bookings/calendar?month=${month}&year=${year}`),
+        api.get(`/bookings/availability/${year}/${month}`)
+      ])
       // Ensure data is always an array
-      setBookedDates(Array.isArray(data) ? data : [])
+      setBookedDates(Array.isArray(calendarData.data) ? calendarData.data : [])
+      const fullyBooked = Array.isArray(availabilityData.data) ? availabilityData.data : []
+      console.log('[Calendar] Fully booked days received:', fullyBooked)
+      setFullyBookedDays(fullyBooked)
     } catch (error: any) {
       console.error('[Calendar] Error fetching data:', error)
       const errorMessage = error.response?.data?.error || 'Failed to load calendar data'
       toast('error', errorMessage)
       setBookedDates([]) // Set empty array on error
+      setFullyBookedDays([])
     } finally {
       setLoading(false)
     }
@@ -68,6 +76,16 @@ export default function Calendar() {
     return booked?.count || 0
   }
 
+  const isFullyBooked = (date: Date) => {
+    if (!Array.isArray(fullyBookedDays)) return false
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const isBooked = fullyBookedDays.includes(dateStr)
+    if (isBooked) {
+      console.log('[Calendar] Date is fully booked:', dateStr)
+    }
+    return isBooked
+  }
+
   const handleDateClick = (date: Date) => {
     if (!isSameMonth(date, currentDate)) return
     // Prevent booking on past dates
@@ -79,6 +97,12 @@ export default function Calendar() {
     const dayOfWeek = date.getDay()
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       toast('error', 'Bookings are only allowed Monday-Friday')
+      return
+    }
+
+    // Prevent booking on fully booked days
+    if (isFullyBooked(date)) {
+      toast('error', 'This day is fully booked')
       return
     }
     
@@ -150,29 +174,32 @@ export default function Calendar() {
               const isToday = isSameDay(day, new Date())
               const isPast = isPastDate(day)
               const isWeekendDay = isWeekend(day)
+              const isFullyBookedDay = isFullyBooked(day)
 
               return (
                 <button
                   key={day.toISOString()}
                   onClick={() => handleDateClick(day)}
-                  disabled={isPast || isWeekendDay}
+                  disabled={isPast || isWeekendDay || isFullyBookedDay}
                   className={`
                     w-12 h-12 p-1 border transition-all text-xs
                     ${isToday ? 'border-blue-500 bg-blue-50 font-bold' : 'border-gray-200'}
-                    ${isWeekendDay
-                      ? 'bg-red-50 text-red-400 cursor-not-allowed'
-                      : isPast 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                        : isBooked 
-                          ? 'bg-blue-100 hover:bg-blue-200 hover:shadow-md' 
-                          : 'hover:bg-blue-50 hover:shadow-md hover:border-blue-300'
+                    ${isFullyBookedDay
+                      ? 'bg-blue-500 text-white cursor-not-allowed'
+                      : isWeekendDay
+                        ? 'bg-red-50 text-red-400 cursor-not-allowed'
+                        : isPast 
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                          : isBooked 
+                            ? 'bg-blue-100 hover:bg-blue-200 hover:shadow-md' 
+                            : 'hover:bg-blue-50 hover:shadow-md hover:border-blue-300'
                     }
-                    ${!isPast && !isWeekendDay && 'active:scale-95'}
+                    ${!isPast && !isWeekendDay && !isFullyBookedDay && 'active:scale-95'}
                     relative flex items-center justify-center
                   `}
                 >
                   <div className="font-medium">{format(day, 'd')}</div>
-                  {isBooked && !isPast && (
+                  {isBooked && !isPast && !isFullyBookedDay && (
                     <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 flex gap-0.5">
                       {Array.from({ length: Math.min(bookingCount, 3) }).map((_, i) => (
                         <div key={i} className="w-1 h-1 bg-blue-600 rounded-full" />
@@ -192,6 +219,10 @@ export default function Calendar() {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
               <span>Has bookings</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded"></div>
+              <span>Fully booked</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 border-2 border-blue-500 rounded"></div>

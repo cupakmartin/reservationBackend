@@ -9,6 +9,7 @@ export interface IClient extends Document {
   refreshToken?: string;
   visitsCount: number;
   loyaltyTier: 'Bronze' | 'Silver' | 'Gold' | 'Worker' | null;
+  manualLoyaltyTier: boolean;
   createdAt: Date;
 }
 
@@ -29,6 +30,7 @@ const ClientSchema: Schema = new Schema({
     enum: ['Bronze', 'Silver', 'Gold', 'Worker', null], 
     default: null 
   },
+  manualLoyaltyTier: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 
