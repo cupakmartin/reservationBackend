@@ -133,7 +133,10 @@ export const getAllBookings = async (req: AuthRequest, res: Response, next: Next
 
 export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        const bookings = await Booking.find({ workerId: req.user?.userId })
+        const bookings = await Booking.find({ 
+            workerId: req.user?.userId,
+            status: { $ne: 'fulfilled' }
+        })
             .populate('clientId')
             .populate('workerId', 'name')
             .populate('procedureId')
@@ -153,6 +156,66 @@ export const getClientBookings = async (req: AuthRequest, res: Response, next: N
             .populate('procedureId')
             .sort({ startsAt: -1 });
         
+        res.json(bookings);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getCompletedSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const workerId = req.user?.userId;
+        const { clientName, date, dateRangeStart, dateRangeEnd, priceSort } = req.query;
+        
+        const filter: Record<string, unknown> = {
+            workerId,
+            status: 'fulfilled'
+        };
+        
+        if (date) {
+            const dateStr = String(date);
+            const startOfDay = new Date(dateStr);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(dateStr);
+            endOfDay.setHours(23, 59, 59, 999);
+            
+            filter.startsAt = {
+                $gte: startOfDay,
+                $lte: endOfDay
+            };
+        } else if (dateRangeStart || dateRangeEnd) {
+            filter.startsAt = {};
+            if (dateRangeStart) {
+                (filter.startsAt as Record<string, Date>).$gte = new Date(String(dateRangeStart));
+            }
+            if (dateRangeEnd) {
+                const endDate = new Date(String(dateRangeEnd));
+                endDate.setHours(23, 59, 59, 999);
+                (filter.startsAt as Record<string, Date>).$lte = endDate;
+            }
+        }
+        
+        let bookingsQuery = Booking.find(filter)
+            .populate('clientId')
+            .populate('workerId', 'name')
+            .populate('procedureId');
+        
+        if (clientName) {
+            const clients = await Client.find({
+                name: { $regex: String(clientName), $options: 'i' }
+            }).select('_id');
+            const clientIds = clients.map(c => c._id);
+            bookingsQuery = bookingsQuery.where('clientId').in(clientIds);
+        }
+        
+        if (priceSort) {
+            const sortOrder = priceSort === 'asc' ? 1 : -1;
+            bookingsQuery = bookingsQuery.sort({ finalPrice: sortOrder });
+        } else {
+            bookingsQuery = bookingsQuery.sort({ startsAt: -1 });
+        }
+        
+        const bookings = await bookingsQuery;
         res.json(bookings);
     } catch (error) {
         next(error);
@@ -729,5 +792,36 @@ export const getCalendar = async (req: AuthRequest, res: Response, next: NextFun
         })
     } catch (error) {
         next(error)
+    }
+}
+
+export const getWorkerDashboardStats = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const workerId = req.user?.userId;
+        
+        const [personalStats, workStats] = await Promise.all([
+            Booking.aggregate([
+                { $match: { clientId: new mongoose.Types.ObjectId(workerId) } },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
+                }
+            ]),
+            Booking.aggregate([
+                { $match: { workerId: new mongoose.Types.ObjectId(workerId) } },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
+                }
+            ])
+        ]);
+        
+        res.json({ personalStats, workStats });
+    } catch (error) {
+        next(error);
     }
 }

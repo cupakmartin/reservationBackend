@@ -51,11 +51,11 @@ describe('Booking API', () => {
             expect(res.body).toHaveLength(5) // 5 seeded bookings
         })
 
-        it('should return 403 for worker', async () => {
+        it('should allow worker to view all bookings', async () => {
             const res = await request(app)
                 .get('/api/bookings')
                 .set('Authorization', `Bearer ${workerToken}`)
-            expect(res.status).toBe(403)
+            expect(res.status).toBe(200)
         })
     })
 
@@ -565,6 +565,285 @@ describe('Booking API', () => {
                 .query({ month: 5, year: 2025 })
 
             expect(res.status).toBe(401)
+        })
+    })
+
+    describe('GET /api/bookings/my-schedule', () => {
+        it('should return only non-fulfilled bookings for worker', async () => {
+            // Create some test bookings with different statuses
+            const workerId = seededData.clients.worker._id
+            const clientId = seededData.clients.client1._id
+            const procedureId = seededData.procedures.facialTreatment._id
+
+            await Booking.create([
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-06-01T10:00:00Z'),
+                    endsAt: new Date('2025-06-01T11:00:00Z'),
+                    status: 'held',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                },
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-06-02T10:00:00Z'),
+                    endsAt: new Date('2025-06-02T11:00:00Z'),
+                    status: 'confirmed',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                },
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-06-03T10:00:00Z'),
+                    endsAt: new Date('2025-06-03T11:00:00Z'),
+                    status: 'fulfilled',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                }
+            ])
+
+            const res = await request(app)
+                .get('/api/bookings/my-schedule')
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body).toBeInstanceOf(Array)
+            
+            // Should not include fulfilled bookings
+            const fulfilledBookings = res.body.filter((b: any) => b.status === 'fulfilled')
+            expect(fulfilledBookings).toHaveLength(0)
+            
+            // Should include held and confirmed bookings
+            const nonFulfilledBookings = res.body.filter((b: any) => 
+                b.status === 'held' || b.status === 'confirmed'
+            )
+            expect(nonFulfilledBookings.length).toBeGreaterThan(0)
+        })
+
+        it('should work for admin', async () => {
+            const res = await request(app)
+                .get('/api/bookings/my-schedule')
+                .set('Authorization', `Bearer ${adminToken}`)
+            
+            expect(res.status).toBe(200)
+        })
+    })
+
+    describe('GET /api/bookings/completed-schedule', () => {
+        it('should return only fulfilled bookings for worker', async () => {
+            const workerId = seededData.clients.worker._id
+            const clientId = seededData.clients.client1._id
+            const procedureId = seededData.procedures.facialTreatment._id
+
+            await Booking.create([
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-07-01T10:00:00Z'),
+                    endsAt: new Date('2025-07-01T11:00:00Z'),
+                    status: 'fulfilled',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                },
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-07-02T10:00:00Z'),
+                    endsAt: new Date('2025-07-02T11:00:00Z'),
+                    status: 'confirmed',
+                    paymentType: 'cash',
+                    finalPrice: 120
+                }
+            ])
+
+            const res = await request(app)
+                .get('/api/bookings/completed-schedule')
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body).toBeInstanceOf(Array)
+            
+            // All returned bookings should be fulfilled
+            res.body.forEach((booking: any) => {
+                expect(booking.status).toBe('fulfilled')
+            })
+        })
+
+        it('should filter by client name', async () => {
+            const workerId = seededData.clients.worker._id
+            const client1Id = seededData.clients.client1._id
+            const procedureId = seededData.procedures.facialTreatment._id
+
+            await Booking.create({
+                clientId: client1Id,
+                workerId,
+                procedureId,
+                startsAt: new Date('2025-07-10T10:00:00Z'),
+                endsAt: new Date('2025-07-10T11:00:00Z'),
+                status: 'fulfilled',
+                paymentType: 'cash',
+                finalPrice: 100
+            })
+
+            const client1 = await Client.findById(client1Id)
+            const searchName = client1?.name.substring(0, 5)
+
+            const res = await request(app)
+                .get('/api/bookings/completed-schedule')
+                .query({ clientName: searchName })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body).toBeInstanceOf(Array)
+        })
+
+        it('should filter by specific date', async () => {
+            const workerId = seededData.clients.worker._id
+            const clientId = seededData.clients.client1._id
+            const procedureId = seededData.procedures.facialTreatment._id
+
+            const testDate = '2025-08-15'
+            await Booking.create({
+                clientId,
+                workerId,
+                procedureId,
+                startsAt: new Date('2025-08-15T10:00:00Z'),
+                endsAt: new Date('2025-08-15T11:00:00Z'),
+                status: 'fulfilled',
+                paymentType: 'cash',
+                finalPrice: 100
+            })
+
+            const res = await request(app)
+                .get('/api/bookings/completed-schedule')
+                .query({ date: testDate })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body).toBeInstanceOf(Array)
+        })
+
+        it('should sort by price ascending', async () => {
+            const workerId = seededData.clients.worker._id
+            const clientId = seededData.clients.client1._id
+            const procedureId = seededData.procedures.facialTreatment._id
+
+            await Booking.create([
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-09-01T10:00:00Z'),
+                    endsAt: new Date('2025-09-01T11:00:00Z'),
+                    status: 'fulfilled',
+                    paymentType: 'cash',
+                    finalPrice: 150
+                },
+                {
+                    clientId,
+                    workerId,
+                    procedureId,
+                    startsAt: new Date('2025-09-02T10:00:00Z'),
+                    endsAt: new Date('2025-09-02T11:00:00Z'),
+                    status: 'fulfilled',
+                    paymentType: 'cash',
+                    finalPrice: 80
+                }
+            ])
+
+            const res = await request(app)
+                .get('/api/bookings/completed-schedule')
+                .query({ priceSort: 'asc' })
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body).toBeInstanceOf(Array)
+            
+            if (res.body.length >= 2) {
+                for (let i = 0; i < res.body.length - 1; i++) {
+                    expect(res.body[i].finalPrice).toBeLessThanOrEqual(res.body[i + 1].finalPrice)
+                }
+            }
+        })
+
+        it('should work for admin', async () => {
+            const res = await request(app)
+                .get('/api/bookings/completed-schedule')
+                .set('Authorization', `Bearer ${adminToken}`)
+            
+            expect(res.status).toBe(200)
+        })
+    })
+
+    describe('GET /api/bookings/worker-stats', () => {
+        it('should return separate personal and work stats for worker', async () => {
+            const workerId = seededData.clients.worker._id
+            const clientId = seededData.clients.client1._id
+            const procedureId = seededData.procedures.facialTreatment._id
+
+            // Create bookings where worker is the client (personal)
+            await Booking.create([
+                {
+                    clientId: workerId,
+                    workerId: clientId,
+                    procedureId,
+                    startsAt: new Date('2025-10-01T10:00:00Z'),
+                    endsAt: new Date('2025-10-01T11:00:00Z'),
+                    status: 'held',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                },
+                {
+                    clientId: workerId,
+                    workerId: clientId,
+                    procedureId,
+                    startsAt: new Date('2025-10-02T10:00:00Z'),
+                    endsAt: new Date('2025-10-02T11:00:00Z'),
+                    status: 'confirmed',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                }
+            ])
+
+            // Create bookings where worker is performing work
+            await Booking.create([
+                {
+                    clientId,
+                    workerId: workerId,
+                    procedureId,
+                    startsAt: new Date('2025-10-03T10:00:00Z'),
+                    endsAt: new Date('2025-10-03T11:00:00Z'),
+                    status: 'fulfilled',
+                    paymentType: 'cash',
+                    finalPrice: 100
+                }
+            ])
+
+            const res = await request(app)
+                .get('/api/bookings/worker-stats')
+                .set('Authorization', `Bearer ${workerToken}`)
+
+            expect(res.status).toBe(200)
+            expect(res.body).toHaveProperty('personalStats')
+            expect(res.body).toHaveProperty('workStats')
+            expect(res.body.personalStats).toBeInstanceOf(Array)
+            expect(res.body.workStats).toBeInstanceOf(Array)
+        })
+
+        it('should work for admin', async () => {
+            const res = await request(app)
+                .get('/api/bookings/worker-stats')
+                .set('Authorization', `Bearer ${adminToken}`)
+            
+            expect(res.status).toBe(200)
         })
     })
 })

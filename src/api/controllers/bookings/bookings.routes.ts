@@ -12,14 +12,18 @@ import {
     getWorkerSchedule,
     getClientBookings,
     getWorkerScheduleForDay,
-    getMonthlyAvailability
+    getMonthlyAvailability,
+    getCompletedSchedule,
+    getWorkerDashboardStats
 } from './bookings.controller'
 
 const router = Router()
 
 // Bookings - date-filtered queries are open to all authenticated users, unfiltered admin only
 router.get('/', authenticate, getAllBookings)
-router.get('/my-schedule', authenticate, checkRole(['worker']), getWorkerSchedule)
+router.get('/my-schedule', authenticate, checkRole(['worker', 'admin']), getWorkerSchedule)
+router.get('/completed-schedule', authenticate, checkRole(['worker', 'admin']), getCompletedSchedule)
+router.get('/worker-stats', authenticate, checkRole(['worker', 'admin']), getWorkerDashboardStats)
 router.get('/my-bookings', authenticate, getClientBookings)
 router.get('/calendar', authenticate, getCalendar)
 router.get('/availability/:year/:month', authenticate, getMonthlyAvailability)

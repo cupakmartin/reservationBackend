@@ -49,13 +49,17 @@ describe('Role-Based UI Rendering', () => {
         </BrowserRouter>
       )
 
-      // Admin should see all menu items
+      // Admin should see all menu items except worker-specific ones
       expect(screen.getByText('Dashboard')).toBeInTheDocument()
       expect(screen.getByText('Calendar')).toBeInTheDocument()
       expect(screen.getByText('Bookings')).toBeInTheDocument()
       expect(screen.getByText('Procedures')).toBeInTheDocument()
       expect(screen.getByText('Clients')).toBeInTheDocument()
       expect(screen.getByText('Materials')).toBeInTheDocument()
+      
+      // Admin should NOT see worker-only items
+      expect(screen.queryByText('My Schedule')).not.toBeInTheDocument()
+      expect(screen.queryByText('Completed Bookings')).not.toBeInTheDocument()
     })
   })
 
@@ -77,6 +81,8 @@ describe('Role-Based UI Rendering', () => {
       expect(screen.getByText('Dashboard')).toBeInTheDocument()
       expect(screen.getByText('Calendar')).toBeInTheDocument()
       expect(screen.getByText('Bookings')).toBeInTheDocument()
+      expect(screen.getByText('My Schedule')).toBeInTheDocument()
+      expect(screen.getByText('Completed Bookings')).toBeInTheDocument()
       expect(screen.getByText('Procedures')).toBeInTheDocument()
       expect(screen.getByText('Materials')).toBeInTheDocument()
       
@@ -105,6 +111,8 @@ describe('Role-Based UI Rendering', () => {
       expect(screen.getByText('Bookings')).toBeInTheDocument()
       
       // Client should NOT see these admin/worker items
+      expect(screen.queryByText('My Schedule')).not.toBeInTheDocument()
+      expect(screen.queryByText('Completed Bookings')).not.toBeInTheDocument()
       expect(screen.queryByText('Procedures')).not.toBeInTheDocument()
       expect(screen.queryByText('Clients')).not.toBeInTheDocument()
       expect(screen.queryByText('Materials')).not.toBeInTheDocument()
