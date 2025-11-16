@@ -130,7 +130,7 @@ export default function MySchedule() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">
-                    {format(new Date(booking.startsAt), 'MMM d, yyyy')}
+                    {format(new Date(booking.startsAt), 'd MMM yyyy')}
                   </CardTitle>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(booking.status)}`}>
                     {booking.status}

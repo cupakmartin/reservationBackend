@@ -5,7 +5,7 @@ import api from '../../lib/api'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
-import Input from '../../components/ui/Input'
+import TimeInput from '../../components/ui/TimeInput'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
 import { Calendar, Clock } from 'lucide-react'
@@ -167,7 +167,7 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
 
   if (loading) {
     return (
-      <Modal onClose={onClose} title={format(date, 'MMMM d, yyyy')}>
+      <Modal onClose={onClose} title={format(date, 'd MMMM yyyy')}>
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
@@ -176,7 +176,7 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
   }
 
   return (
-    <Modal onClose={onClose} title={format(date, 'MMMM d, yyyy')}>
+    <Modal onClose={onClose} title={format(date, 'd MMMM yyyy')}>
       <div className="space-y-6">
         {/* Worker Schedule */}
         {formData.workerId && workerSchedule.length > 0 && (
@@ -240,14 +240,12 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
             required
           />
 
-          <Input
+          <TimeInput
             label="Time (08:00 - 20:00)"
-            type="time"
             value={formData.time}
             onChange={(e) => setFormData({ ...formData, time: e.target.value })}
             min="08:00"
             max="20:00"
-            step="60"
             required
           />
 

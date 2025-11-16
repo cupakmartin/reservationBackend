@@ -12,6 +12,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, id, ...props }, ref) => {
     const inputId = id || props.name || `input-${Math.random().toString(36).substr(2, 9)}`
     
+    // For date inputs, add specific styling to show dd/mm/yyyy format
+    const isDateInput = props.type === 'date'
+    
     return (
       <div className="w-full">
         {label && (
@@ -34,6 +37,13 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {isDateInput && (
+          <style>{`
+            input[type="date"]::-webkit-date-and-time-value {
+              text-align: left;
+            }
+          `}</style>
+        )}
       </div>
     )
   }

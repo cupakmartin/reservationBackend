@@ -205,12 +205,14 @@ export default function Materials() {
               <Input
                 label="Date From"
                 type="date"
+                placeholder="dd/mm/yyyy"
                 value={filters.dateFrom}
                 onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
               />
               <Input
                 label="Date To"
                 type="date"
+                placeholder="dd/mm/yyyy"
                 value={filters.dateTo}
                 onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
               />

@@ -217,10 +217,6 @@ export default function Calendar() {
 
           <div className="mt-3 flex items-center justify-center gap-4 text-xs text-gray-600">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              <span>Has bookings</span>
-            </div>
-            <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded"></div>
               <span>Fully booked</span>
             </div>

@@ -258,7 +258,8 @@ export const getMonthlyAvailability = async (req: AuthRequest, res: Response, ne
             );
             
             if (isFullyBooked) {
-                const dateStr = currentDate.toISOString().split('T')[0];
+                // Format date without timezone conversion: YYYY-MM-DD
+                const dateStr = `${yearNum}-${String(monthNum + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 console.log(`[Availability] Day ${dateStr} is fully booked`);
                 fullyBookedDays.push(dateStr);
             }
@@ -290,7 +291,9 @@ const isDayFullyBooked = async (
         }
     }).sort({ startsAt: 1 });
     
-    console.log(`[isDayFullyBooked] Checking ${date.toISOString().split('T')[0]}, found ${bookings.length} bookings`);
+    // Format date without timezone conversion for logging
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    console.log(`[isDayFullyBooked] Checking ${dateStr}, found ${bookings.length} bookings`);
     
     // Calculate total booked minutes per worker
     const workerBookedMinutes = new Map<string, number>();
