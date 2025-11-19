@@ -1,21 +1,42 @@
 // src/components/Layout.tsx
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { LogOut, Calendar, Users, Package, Clipboard, Home, CalendarCheck, CheckCircle } from 'lucide-react'
+import { LogOut, Calendar, Users, Package, Clipboard, Home, CalendarCheck, CheckCircle, BarChart3, Upload, Star } from 'lucide-react'
 import Button from './ui/Button'
+import Avatar from './ui/Avatar'
+import UploadModal from './ui/UploadModal'
+import { useState } from 'react'
+import api from '../lib/api'
+import { toast } from './ui/Toast'
 
 interface LayoutProps {
   children: React.ReactNode
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { user, logout } = useAuthStore()
+  const { user, logout, setUser } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
+  const [showUploadModal, setShowUploadModal] = useState(false)
 
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const handleAvatarUpload = async (file: File) => {
+    const formData = new FormData()
+    formData.append('avatar', file)
+
+    const { data } = await api.post('/auth/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+
+    if (user) {
+      setUser({ ...user, avatarUrl: data.avatarUrl })
+    }
+
+    toast('success', 'Avatar updated successfully!')
   }
 
   const isActive = (path: string) => location.pathname === path
@@ -25,10 +46,12 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Calendar', href: '/calendar', icon: Calendar, roles: ['client', 'worker', 'admin'] },
     { name: 'Bookings', href: '/bookings', icon: Clipboard, roles: ['client', 'worker', 'admin'] },
     { name: 'My Schedule', href: '/my-schedule', icon: CalendarCheck, roles: ['worker'] },
-    { name: 'Completed Bookings', href: '/completed-bookings', icon: CheckCircle, roles: ['worker'] },
+    { name: 'Completed Bookings', href: '/completed-bookings', icon: CheckCircle, roles: ['client', 'worker'] },
+    { name: 'Reviews', href: '/reviews', icon: Star, roles: ['worker', 'admin'] },
     { name: 'Procedures', href: '/procedures', icon: Package, roles: ['worker', 'admin'] },
     { name: 'Clients', href: '/clients', icon: Users, roles: ['admin'] },
     { name: 'Materials', href: '/materials', icon: Package, roles: ['worker', 'admin'] },
+    { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['admin'] },
   ]
 
   const filteredNavigation = navigation.filter((item) =>
@@ -45,6 +68,21 @@ export default function Layout({ children }: LayoutProps) {
               <h1 className="text-2xl font-bold text-blue-600">GlowFlow Salon</h1>
             </div>
             <div className="flex items-center gap-4">
+              <div className="relative group">
+                <Avatar 
+                  name={user?.name || ''} 
+                  avatarUrl={user?.avatarUrl}
+                  size="md"
+                  className="cursor-pointer"
+                />
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="absolute bottom-0 right-0 bg-blue-600 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Upload avatar"
+                >
+                  <Upload className="h-3 w-3 text-white" />
+                </button>
+              </div>
               <div className="text-sm">
                 <p className="font-medium text-gray-900">{user?.name}</p>
                 <p className="text-gray-500 capitalize">{user?.role}</p>
@@ -87,6 +125,17 @@ export default function Layout({ children }: LayoutProps) {
           <div className="max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <UploadModal
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleAvatarUpload}
+          title="Upload Profile Picture"
+          accept="image/*"
+          maxSize={5}
+        />
+      )}
     </div>
   )
 }

@@ -1,14 +1,17 @@
 // src/pages/CompletedBookings/CompletedBookings.tsx
 import { useEffect, useState } from 'react'
 import { useWebSocket } from '../../lib/websocket'
+import { useAuthStore } from '../../store/authStore'
 import api from '../../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Button from '../../components/ui/Button'
+import Avatar from '../../components/ui/Avatar'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
-import { Calendar, Clock, User, Briefcase, DollarSign, CreditCard, Filter } from 'lucide-react'
+import { Calendar, Clock, Briefcase, DollarSign, CreditCard, Filter, Star } from 'lucide-react'
+import ReviewModal from './ReviewModal'
 
 interface Booking {
   _id: string
@@ -16,6 +19,12 @@ interface Booking {
     _id: string
     name: string
     email: string
+    avatarUrl?: string
+  }
+  workerId: {
+    _id: string
+    name: string
+    avatarUrl?: string
   }
   procedureId: {
     _id: string
@@ -31,9 +40,13 @@ interface Booking {
 }
 
 export default function CompletedBookings() {
+  const { user } = useAuthStore()
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [reviews, setReviews] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const { lastEvent } = useWebSocket()
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [showReviewModal, setShowReviewModal] = useState(false)
   
   const [clientName, setClientName] = useState('')
   const [date, setDate] = useState('')
@@ -56,6 +69,21 @@ export default function CompletedBookings() {
       
       const { data } = await api.get(url)
       setBookings(data)
+      
+      // Check which bookings already have reviews
+      const reviewChecks = await Promise.all(
+        data.map((booking: Booking) => 
+          api.get(`/reviews/booking/${booking._id}`)
+            .then(res => ({ bookingId: booking._id, hasReview: !!res.data }))
+            .catch(() => ({ bookingId: booking._id, hasReview: false }))
+        )
+      )
+      
+      const reviewMap: Record<string, boolean> = {}
+      reviewChecks.forEach(check => {
+        reviewMap[check.bookingId] = check.hasReview
+      })
+      setReviews(reviewMap)
     } catch (error) {
       console.error('Failed to fetch completed bookings:', error)
       const errorMessage = (error as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Failed to load completed bookings'
@@ -221,13 +249,35 @@ export default function CompletedBookings() {
                 </div>
                 
                 <div className="border-t pt-3 space-y-2">
-                  <div className="flex items-start text-sm">
-                    <User className="h-4 w-4 mr-2 text-gray-500 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-gray-900">{booking.clientId.name}</p>
-                      <p className="text-gray-600 text-xs">{booking.clientId.email}</p>
+                  {/* Show worker info for clients, client info for workers */}
+                  {user?.role === 'client' ? (
+                    <div className="flex items-start text-sm">
+                      <Avatar 
+                        name={booking.workerId?.name || 'Unknown'} 
+                        avatarUrl={booking.workerId?.avatarUrl}
+                        size="sm"
+                        className="mr-2"
+                      />
+                      <div>
+                        <p className="text-xs text-gray-500">Worker</p>
+                        <p className="font-medium text-gray-900">{booking.workerId?.name || 'Unknown'}</p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-start text-sm">
+                      <Avatar 
+                        name={booking.clientId.name} 
+                        avatarUrl={booking.clientId.avatarUrl}
+                        size="sm"
+                        className="mr-2"
+                      />
+                      <div>
+                        <p className="text-xs text-gray-500">Client</p>
+                        <p className="font-medium text-gray-900">{booking.clientId.name}</p>
+                        <p className="text-gray-600 text-xs">{booking.clientId.email}</p>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="flex items-center text-sm">
                     <Briefcase className="h-4 w-4 mr-2 text-gray-500" />
@@ -245,10 +295,49 @@ export default function CompletedBookings() {
                     <span className="capitalize">{booking.paymentType}</span>
                   </div>
                 </div>
+                
+                {/* Only clients can leave reviews */}
+                {user?.role === 'client' && (
+                  <div className="mt-4 pt-3 border-t">
+                    {reviews[booking._id] ? (
+                      <div className="flex items-center justify-center text-sm text-green-600">
+                        <Star className="h-4 w-4 mr-1 fill-green-600" />
+                        Review Submitted
+                      </div>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedBooking(booking)
+                          setShowReviewModal(true)
+                        }}
+                        className="w-full"
+                      >
+                        <Star className="h-4 w-4 mr-2" />
+                        Leave Review
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
+      )}
+      
+      {showReviewModal && selectedBooking && (
+        <ReviewModal
+          bookingId={selectedBooking._id}
+          workerName={selectedBooking.workerId.name}
+          onClose={() => {
+            setShowReviewModal(false)
+            setSelectedBooking(null)
+          }}
+          onSuccess={() => {
+            fetchBookings()
+          }}
+        />
       )}
     </div>
   )

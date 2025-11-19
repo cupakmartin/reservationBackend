@@ -190,7 +190,11 @@ export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: N
 
 export const getClientBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        const bookings = await Booking.find({ clientId: req.user?.userId })
+        // Exclude fulfilled bookings - those appear in "Completed Bookings" page
+        const bookings = await Booking.find({ 
+            clientId: req.user?.userId,
+            status: { $ne: 'fulfilled' }
+        })
             .populate('clientId', 'name')
             .populate('procedureId')
             .sort({ startsAt: -1 })
@@ -217,13 +221,22 @@ export const getClientBookings = async (req: AuthRequest, res: Response, next: N
 
 export const getCompletedSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        const workerId = req.user?.userId;
+        const userId = req.user?.userId;
+        const userRole = req.user?.role;
         const { clientName, date, dateRangeStart, dateRangeEnd, priceSort } = req.query;
         
+        // Build filter based on user role
         const filter: Record<string, unknown> = {
-            workerId,
             status: 'fulfilled'
         };
+        
+        // For clients, show their completed bookings
+        // For workers, show bookings they worked on
+        if (userRole === 'client') {
+            filter.clientId = userId;
+        } else {
+            filter.workerId = userId;
+        }
         
         if (date) {
             const dateStr = String(date);
@@ -1019,6 +1032,73 @@ export const getUserCalendarStatus = async (req: AuthRequest, res: Response, nex
         }
         
         res.json([...personalDates, ...workDates]);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getRevenueAnalytics = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+        const revenueData = await Booking.aggregate([
+            {
+                $match: {
+                    status: 'fulfilled',
+                    createdAt: { $gte: twelveMonthsAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createdAt' },
+                        month: { $month: '$createdAt' }
+                    },
+                    totalRevenue: { $sum: '$finalPrice' },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } }
+        ]);
+
+        res.json(revenueData);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getPerformanceAnalytics = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const performanceData = await Booking.aggregate([
+            {
+                $match: {
+                    status: 'fulfilled'
+                }
+            },
+            {
+                $group: {
+                    _id: '$workerId',
+                    totalBookings: { $sum: 1 },
+                    totalRevenue: { $sum: '$finalPrice' }
+                }
+            },
+            { $sort: { totalBookings: -1 } },
+            { $limit: 10 }
+        ]);
+
+        const workerIds = performanceData.map(p => p._id);
+        const workers = await Client.find({ _id: { $in: workerIds } }).select('name');
+        const workerMap = new Map(workers.map(w => [String(w._id), w.name]));
+
+        const enrichedData = performanceData.map(perf => ({
+            workerId: perf._id,
+            workerName: workerMap.get(perf._id.toString()) || 'Unknown',
+            totalBookings: perf.totalBookings,
+            totalRevenue: perf.totalRevenue
+        }));
+
+        res.json(enrichedData);
     } catch (error) {
         next(error);
     }

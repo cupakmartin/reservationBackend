@@ -6,6 +6,7 @@ import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import TimeInput from '../../components/ui/TimeInput'
+import Avatar from '../../components/ui/Avatar'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
 import { Calendar, Clock, AlertTriangle } from 'lucide-react'
@@ -26,6 +27,7 @@ interface Client {
 interface Worker {
   _id: string
   name: string
+  avatarUrl?: string
 }
 
 interface BookingStatus {
@@ -48,6 +50,7 @@ export default function BookingModal({ date, bookingStatus, onClose, onSuccess }
   const [procedures, setProcedures] = useState<Procedure[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
+  const [workerRatings, setWorkerRatings] = useState<Record<string, number>>({})
   const [workerSchedule, setWorkerSchedule] = useState<{ startsAt: string; endsAt: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -79,6 +82,20 @@ export default function BookingModal({ date, bookingStatus, onClose, onSuccess }
           ? allWorkers.filter((w: Worker) => w._id !== user.id)
           : allWorkers
         setWorkers(filteredWorkers)
+        
+        // Fetch ratings for all workers
+        const ratings: Record<string, number> = {}
+        await Promise.all(
+          filteredWorkers.map(async (worker: Worker) => {
+            try {
+              const { data } = await api.get(`/reviews/worker/${worker._id}`)
+              ratings[worker._id] = data.averageRating || 0
+            } catch {
+              ratings[worker._id] = 0
+            }
+          })
+        )
+        setWorkerRatings(ratings)
       } catch (error: any) {
         console.error('Error fetching booking data:', error)
         const errorMessage = error.response?.data?.error || 'Failed to load booking data'
@@ -107,6 +124,30 @@ export default function BookingModal({ date, bookingStatus, onClose, onSuccess }
 
   const formatTime = (isoString: string) => {
     return format(new Date(isoString), 'HH:mm')
+  }
+
+  const getMinTime = () => {
+    const now = new Date()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const selectedDate = new Date(date)
+    selectedDate.setHours(0, 0, 0, 0)
+    
+    // If selected date is today, set min time to current hour rounded up
+    if (selectedDate.getTime() === today.getTime()) {
+      const currentHour = now.getHours()
+      const currentMinutes = now.getMinutes()
+      
+      // Round up to next hour if there are any minutes
+      const minHour = currentMinutes > 0 ? currentHour + 1 : currentHour
+      
+      // Ensure it's at least 08:00
+      const effectiveMinHour = Math.max(minHour, 8)
+      
+      return `${effectiveMinHour.toString().padStart(2, '0')}:00`
+    }
+    
+    return '08:00'
   }
 
   // Fetch worker schedule when worker is selected
@@ -151,6 +192,14 @@ export default function BookingModal({ date, bookingStatus, onClose, onSuccess }
       // Create startsAt datetime
       const dateStr = format(date, 'yyyy-MM-dd')
       const startsAt = new Date(`${dateStr}T${formData.time}:00`)
+      const now = new Date()
+      
+      // Validate that booking is not in the past
+      if (startsAt <= now) {
+        toast('error', 'Cannot create bookings in the past. Please choose a future time.')
+        setSubmitting(false)
+        return
+      }
       
       // Calculate endsAt based on procedure duration
       const endsAt = new Date(startsAt.getTime() + selectedProcedure.durationMin * 60000)
@@ -307,22 +356,49 @@ export default function BookingModal({ date, bookingStatus, onClose, onSuccess }
             required
           />
 
-          <Select
-            label="Worker"
-            value={formData.workerId}
-            onChange={(e) => setFormData({ ...formData, workerId: e.target.value })}
-            options={[
-              { value: '', label: 'Select a worker' },
-              ...workers.map(w => ({ value: w._id, label: w.name })),
-            ]}
-            required
-          />
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Worker <span className="text-red-500 ml-1">*</span>
+            </label>
+            <select
+              value={formData.workerId}
+              onChange={(e) => setFormData({ ...formData, workerId: e.target.value })}
+              className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            >
+              <option value="">Select a worker</option>
+              {workers.map(w => {
+                const rating = workerRatings[w._id]
+                const ratingText = rating > 0 ? ` ⭐ ${rating.toFixed(1)}` : ''
+                return (
+                  <option key={w._id} value={w._id}>
+                    {w.name}{ratingText}
+                  </option>
+                )
+              })}
+            </select>
+            {formData.workerId && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                <Avatar 
+                  name={workers.find(w => w._id === formData.workerId)?.name || ''} 
+                  avatarUrl={workers.find(w => w._id === formData.workerId)?.avatarUrl}
+                  size="sm"
+                />
+                <span>
+                  {workers.find(w => w._id === formData.workerId)?.name}
+                  {workerRatings[formData.workerId] > 0 && (
+                    <span className="ml-2">⭐ {workerRatings[formData.workerId].toFixed(1)}</span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
 
           <TimeInput
             label="Time (08:00 - 20:00)"
             value={formData.time}
             onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-            min="08:00"
+            min={getMinTime()}
             max="20:00"
             required
           />

@@ -7,14 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Ca
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
+import Avatar from '../../components/ui/Avatar'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
 import { Calendar, Clock, User, Briefcase, DollarSign, Trash2, Filter, X, CheckSquare, Square } from 'lucide-react'
 
 interface Booking {
   _id: string
-  clientId: { _id: string; name: string; email: string; loyaltyTier?: string | null }
-  workerId?: { _id: string; name: string }
+  clientId: { _id: string; name: string; email: string; loyaltyTier?: string | null; avatarUrl?: string }
+  workerId?: { _id: string; name: string; avatarUrl?: string }
   procedureId: { _id: string; name: string; price: number; durationMin: number }
   startsAt: string
   endsAt: string
@@ -461,8 +462,12 @@ export default function Bookings() {
                       </div>
 
                       {user?.role === 'admin' && (
-                        <div className="flex items-center text-sm">
-                          <User className="h-4 w-4 mr-2 text-gray-500 shrink-0" />
+                        <div className="flex items-center text-sm gap-2">
+                          <Avatar 
+                            name={booking.clientId?.name ?? 'N/A'} 
+                            avatarUrl={booking.clientId?.avatarUrl}
+                            size="sm"
+                          />
                           <div>
                             <div className="font-semibold">{booking.clientId?.name ?? 'N/A'}</div>
                             <div className="text-gray-500">{booking.clientId?.email ?? 'N/A'}</div>
@@ -471,8 +476,12 @@ export default function Bookings() {
                       )}
 
                       {user?.role === 'worker' && (
-                        <div className="flex items-center text-sm">
-                          <User className="h-4 w-4 mr-2 text-gray-500 shrink-0" />
+                        <div className="flex items-center text-sm gap-2">
+                          <Avatar 
+                            name={booking.clientId?.name ?? 'N/A'} 
+                            avatarUrl={booking.clientId?.avatarUrl}
+                            size="sm"
+                          />
                           <div>
                             <div className="font-semibold">Client</div>
                             <div className="text-gray-500">{booking.clientId?.name ?? 'N/A'}</div>
@@ -481,8 +490,16 @@ export default function Bookings() {
                       )}
 
                       {user?.role !== 'client' && (
-                        <div className="flex items-center text-sm">
-                          <User className="h-4 w-4 mr-2 text-blue-500 shrink-0" />
+                        <div className="flex items-center text-sm gap-2">
+                          {booking.workerId && typeof booking.workerId === 'object' && 'name' in booking.workerId ? (
+                            <Avatar 
+                              name={booking.workerId.name} 
+                              avatarUrl={booking.workerId.avatarUrl}
+                              size="sm"
+                            />
+                          ) : (
+                            <User className="h-8 w-8 text-blue-500 shrink-0" />
+                          )}
                           <div>
                             <div className="font-semibold text-blue-600">Worker</div>
                             <div className="text-gray-500">

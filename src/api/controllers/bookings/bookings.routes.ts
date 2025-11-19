@@ -15,16 +15,22 @@ import {
     getMonthlyAvailability,
     getCompletedSchedule,
     getWorkerDashboardStats,
-    getUserCalendarStatus
+    getUserCalendarStatus,
+    getRevenueAnalytics,
+    getPerformanceAnalytics
 } from './bookings.controller'
 
 const router = Router()
+
+// Analytics endpoints (admin only)
+router.get('/analytics/revenue', authenticate, checkRole(['admin']), getRevenueAnalytics)
+router.get('/analytics/performance', authenticate, checkRole(['admin']), getPerformanceAnalytics)
 
 // Bookings - date-filtered queries are open to all authenticated users, unfiltered admin only
 router.get('/', authenticate, getAllBookings)
 router.get('/status', authenticate, getUserCalendarStatus)
 router.get('/my-schedule', authenticate, checkRole(['worker', 'admin']), getWorkerSchedule)
-router.get('/completed-schedule', authenticate, checkRole(['worker', 'admin']), getCompletedSchedule)
+router.get('/completed-schedule', authenticate, checkRole(['client', 'worker', 'admin']), getCompletedSchedule)
 router.get('/worker-stats', authenticate, checkRole(['worker', 'admin']), getWorkerDashboardStats)
 router.get('/my-bookings', authenticate, getClientBookings)
 router.get('/calendar', authenticate, getCalendar)

@@ -102,10 +102,21 @@ export default function Calendar() {
 
   const handleDateClick = (date: Date) => {
     if (!isSameMonth(date, currentDate)) return
-    // Prevent booking on past dates
+    
+    const now = new Date()
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    if (date < today) return
+    const dateOnly = new Date(date)
+    dateOnly.setHours(0, 0, 0, 0)
+    
+    // Prevent booking on past dates
+    if (dateOnly < today) return
+    
+    // If today and current time is >= 20:00, disable today as well
+    if (dateOnly.getTime() === today.getTime() && now.getHours() >= 20) {
+      toast('error', 'Cannot create bookings for today after 20:00')
+      return
+    }
     
     // Prevent booking on weekends (0 = Sunday, 6 = Saturday)
     const dayOfWeek = date.getDay()
@@ -133,9 +144,19 @@ export default function Calendar() {
   }
 
   const isPastDate = (date: Date) => {
+    const now = new Date()
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    return date < today
+    const dateOnly = new Date(date)
+    dateOnly.setHours(0, 0, 0, 0)
+    
+    // If date is before today, it's past
+    if (dateOnly < today) return true
+    
+    // If date is today and current time is >= 20:00, consider it past
+    if (dateOnly.getTime() === today.getTime() && now.getHours() >= 20) return true
+    
+    return false
   }
 
   const isWeekend = (date: Date) => {

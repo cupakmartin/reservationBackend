@@ -25,6 +25,9 @@ export function createApp() {
 
     registerRoutes(app)
 
+    // Serve uploaded files
+    app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+
     // Serve dev GUI at /dev (for developers)
     app.use('/dev', express.static(path.join(__dirname, '../public')))
 

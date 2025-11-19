@@ -10,6 +10,7 @@ export interface IClient extends Document {
   visitsCount: number;
   loyaltyTier: 'Bronze' | 'Silver' | 'Gold' | 'Worker' | null;
   manualLoyaltyTier: boolean;
+  avatarUrl?: string;
   createdAt: Date;
 }
 
@@ -25,6 +26,7 @@ const ClientSchema: Schema = new Schema({
   },
   refreshToken: { type: String, select: false },
   visitsCount: { type: Number, default: 0 },
+  avatarUrl: { type: String, required: false },
   loyaltyTier: { 
     type: String, 
     enum: ['Bronze', 'Silver', 'Gold', 'Worker', null], 

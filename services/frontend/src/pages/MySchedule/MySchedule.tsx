@@ -4,9 +4,10 @@ import { useWebSocket } from '../../lib/websocket'
 import api from '../../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
+import Avatar from '../../components/ui/Avatar'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
-import { Calendar, Clock, User, Briefcase, DollarSign, CreditCard } from 'lucide-react'
+import { Calendar, Clock, Briefcase, DollarSign, CreditCard } from 'lucide-react'
 
 interface Booking {
   _id: string
@@ -14,6 +15,7 @@ interface Booking {
     _id: string
     name: string
     email: string
+    avatarUrl?: string
   }
   procedureId: {
     _id: string
@@ -147,7 +149,12 @@ export default function MySchedule() {
                 
                 <div className="border-t pt-3 space-y-2">
                   <div className="flex items-start text-sm">
-                    <User className="h-4 w-4 mr-2 text-gray-500 mt-0.5" />
+                    <Avatar 
+                      name={booking.clientId.name} 
+                      avatarUrl={booking.clientId.avatarUrl}
+                      size="sm"
+                      className="mr-2"
+                    />
                     <div>
                       <p className="font-medium text-gray-900">{booking.clientId.name}</p>
                       <p className="text-gray-600 text-xs">{booking.clientId.email}</p>

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, refresh, getMe } from './auth.controller';
+import { register, login, refresh, getMe, uploadAvatar, upload } from './auth.controller';
 import { validate } from '../../../middleware/validation';
 import { authenticate } from '../../../middleware/auth';
 import { z } from 'zod';
@@ -27,5 +27,6 @@ router.post('/register', validate(registerSchema), register);
 router.post('/login', validate(loginSchema), login);
 router.post('/refresh', validate(refreshSchema), refresh);
 router.get('/me', authenticate, getMe);
+router.post('/avatar', authenticate, upload.single('avatar'), uploadAvatar);
 
 export default router;

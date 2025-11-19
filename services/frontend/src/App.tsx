@@ -17,6 +17,8 @@ import CompletedBookings from './pages/CompletedBookings/CompletedBookings'
 import Procedures from './pages/Procedures/Procedures'
 import Clients from './pages/Clients/Clients'
 import Materials from './pages/Materials/Materials'
+import Analytics from './pages/Analytics/Analytics'
+import Reviews from './pages/Reviews/Reviews'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -47,6 +49,8 @@ function App() {
                     <Route path="/procedures" element={<Procedures />} />
                     <Route path="/clients" element={<Clients />} />
                     <Route path="/materials" element={<Materials />} />
+                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/reviews" element={<Reviews />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

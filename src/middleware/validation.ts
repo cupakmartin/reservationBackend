@@ -76,6 +76,12 @@ export const createBookingSchema = z.object({
 }).refine((data) => {
     const startsAt = new Date(data.startsAt);
     const endsAt = new Date(data.endsAt);
+    const now = new Date();
+
+    // Check if booking is in the past
+    if (startsAt <= now) {
+        return false;
+    }
 
     // Check Weekday (Mon-Fri)
     const day = startsAt.getDay(); // Sunday is 0, Saturday is 6
@@ -104,7 +110,7 @@ export const createBookingSchema = z.object({
 
     return true;
 }, {
-    message: "Bookings must be within 8:00 - 20:00, Monday to Friday.",
+    message: "Cannot create bookings in the past. Bookings must be within 8:00 - 20:00, Monday to Friday.",
 })
 
 export const updateBookingSchema = z.object({
