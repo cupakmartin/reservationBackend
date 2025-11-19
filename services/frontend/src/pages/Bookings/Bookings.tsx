@@ -485,7 +485,21 @@ export default function Bookings() {
                           <User className="h-4 w-4 mr-2 text-blue-500 shrink-0" />
                           <div>
                             <div className="font-semibold text-blue-600">Worker</div>
-                            <div className="text-gray-500">{booking.workerId?.name ?? 'Not Assigned'}</div>
+                            <div className="text-gray-500">
+                              {(() => {
+                                // workerId can be:
+                                // 1. undefined/null - not assigned
+                                // 2. object with name - successfully populated
+                                // 3. null after failed populate - deleted worker
+                                const wid = booking.workerId;
+                                if (!wid) return 'Not Assigned';
+                                if (typeof wid === 'object' && wid !== null && 'name' in wid) {
+                                  return wid.name;
+                                }
+                                // Failed populate or deleted worker
+                                return 'Deleted Worker';
+                              })()}
+                            </div>
                           </div>
                         </div>
                       )}

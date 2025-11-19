@@ -42,10 +42,9 @@ export const getAllBookings = async (req: AuthRequest, res: Response, next: Next
             }
         }
         
-        // Get bookings with filter
+        // Get bookings with filter - DON'T populate workerId to preserve ObjectId when worker deleted
         let bookingsQuery = Booking.find(filter)
             .populate('clientId')
-            .populate('workerId')
             .populate('procedureId');
         
         // Apply client name filter
@@ -104,28 +103,43 @@ export const getAllBookings = async (req: AuthRequest, res: Response, next: Next
         
         let bookings = await bookingsQuery.exec();
         
+        // Manually populate workerId to handle deleted workers gracefully
+        const workerIds = [...new Set(bookings.map(b => b.workerId).filter(Boolean))];
+        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
+        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
+        
+        // Enrich bookings with worker data
+        const enrichedBookings = bookings.map(booking => {
+            const bookingObj = booking.toObject();
+            if (bookingObj.workerId) {
+                const worker = workerMap.get(bookingObj.workerId.toString());
+                (bookingObj.workerId as any) = worker || null; // null if worker was deleted
+            }
+            return bookingObj;
+        });
+        
         // Post-query sorting for populated fields
         if (sortBy === 'clientName') {
-            bookings = bookings.sort((a, b) => {
+            enrichedBookings.sort((a, b) => {
                 const nameA = (a.clientId as any)?.name?.toLowerCase() || '';
                 const nameB = (b.clientId as any)?.name?.toLowerCase() || '';
                 return sortOrder === 1 ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
             });
         } else if (sortBy === 'workerName') {
-            bookings = bookings.sort((a, b) => {
+            enrichedBookings.sort((a, b) => {
                 const nameA = (a.workerId as any)?.name?.toLowerCase() || '';
                 const nameB = (b.workerId as any)?.name?.toLowerCase() || '';
                 return sortOrder === 1 ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
             });
         } else if (sortBy === 'duration') {
-            bookings = bookings.sort((a, b) => {
+            enrichedBookings.sort((a, b) => {
                 const durA = (a.procedureId as any)?.durationMin || 0;
                 const durB = (b.procedureId as any)?.durationMin || 0;
                 return sortOrder === 1 ? durA - durB : durB - durA;
             });
         }
         
-        res.json(bookings);
+        res.json(enrichedBookings);
     } catch (error) {
         next(error);
     }
@@ -133,17 +147,43 @@ export const getAllBookings = async (req: AuthRequest, res: Response, next: Next
 
 export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
+        // Convert userId to ObjectId for comparison since workerId can be Mixed type
+        const workerObjectId = new mongoose.Types.ObjectId(req.user?.userId);
+        
+        console.log('[getWorkerSchedule] Looking for bookings with workerId:', workerObjectId.toString());
+        
         const bookings = await Booking.find({ 
-            workerId: req.user?.userId,
+            workerId: workerObjectId,
             status: { $ne: 'fulfilled' }
         })
             .populate('clientId')
-            .populate('workerId', 'name')
             .populate('procedureId')
-            .sort({ startsAt: 1 });
+            .sort({ startsAt: 1 })
+            .lean();
         
-        res.json(bookings);
+        console.log('[getWorkerSchedule] Found', bookings.length, 'bookings');
+        console.log('[getWorkerSchedule] Sample workerId values:', bookings.slice(0, 2).map(b => ({ 
+            bookingId: b._id, 
+            workerId: (b as any).workerId,
+            workerIdType: typeof (b as any).workerId 
+        })));
+        
+        // Manually populate workerId
+        const workerIds = [...new Set(bookings.map(b => (b as any).workerId).filter(Boolean))];
+        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
+        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
+        
+        const enrichedBookings = bookings.map(booking => {
+            if ((booking as any).workerId) {
+                const worker = workerMap.get((booking as any).workerId.toString());
+                (booking as any).workerId = worker || null;
+            }
+            return booking;
+        });
+        
+        res.json(enrichedBookings);
     } catch (error) {
+        console.error('[getWorkerSchedule] Error:', error);
         next(error);
     }
 }
@@ -152,11 +192,24 @@ export const getClientBookings = async (req: AuthRequest, res: Response, next: N
     try {
         const bookings = await Booking.find({ clientId: req.user?.userId })
             .populate('clientId', 'name')
-            .populate('workerId', 'name')
             .populate('procedureId')
-            .sort({ startsAt: -1 });
+            .sort({ startsAt: -1 })
+            .lean();
         
-        res.json(bookings);
+        // Manually populate workerId
+        const workerIds = [...new Set(bookings.map(b => b.workerId).filter(Boolean))];
+        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
+        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
+        
+        const enrichedBookings = bookings.map(booking => {
+            if (booking.workerId) {
+                const worker = workerMap.get(booking.workerId.toString());
+                (booking.workerId as any) = worker || null;
+            }
+            return booking;
+        });
+        
+        res.json(enrichedBookings);
     } catch (error) {
         next(error);
     }
@@ -197,7 +250,6 @@ export const getCompletedSchedule = async (req: AuthRequest, res: Response, next
         
         let bookingsQuery = Booking.find(filter)
             .populate('clientId')
-            .populate('workerId', 'name')
             .populate('procedureId');
         
         if (clientName) {
@@ -215,8 +267,22 @@ export const getCompletedSchedule = async (req: AuthRequest, res: Response, next
             bookingsQuery = bookingsQuery.sort({ startsAt: -1 });
         }
         
-        const bookings = await bookingsQuery;
-        res.json(bookings);
+        const bookings = await bookingsQuery.lean();
+        
+        // Manually populate workerId
+        const workerIds = [...new Set(bookings.map((b: any) => b.workerId).filter(Boolean))];
+        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
+        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
+        
+        const enrichedBookings = bookings.map((booking: any) => {
+            if (booking.workerId) {
+                const worker = workerMap.get(booking.workerId.toString());
+                booking.workerId = worker || null;
+            }
+            return booking;
+        });
+        
+        res.json(enrichedBookings);
     } catch (error) {
         next(error);
     }
@@ -363,7 +429,7 @@ const isDayFullyBooked = async (
     
     for (const workerId of workerIds) {
         const workerBookings = bookings.filter(
-            b => b.workerId.toString() === workerId.toString()
+            b => b.workerId && b.workerId.toString() === workerId.toString()
         );
         
         let totalMinutes = 0;
@@ -487,8 +553,23 @@ export const createBooking = async (req: AuthRequest, res: Response, next: NextF
             finalPrice
         }
         
-        const booking = await Booking.create(bookingData)
-        await sendBookingNotifications(booking)
+        console.log('[createBooking] Creating booking with data:', {
+            clientId: bookingData.clientId,
+            workerId: bookingData.workerId,
+            workerIdType: typeof bookingData.workerId,
+            procedureId: bookingData.procedureId,
+            startsAt: bookingData.startsAt
+        });
+        
+        const booking = await Booking.create(bookingData);
+        
+        console.log('[createBooking] Booking created:', {
+            _id: booking._id,
+            workerId: (booking as any).workerId,
+            workerIdType: typeof (booking as any).workerId
+        });
+        
+        await sendBookingNotifications(booking);
         
         // Emit WebSocket event
         emitBookingUpdate('created', booking)
@@ -672,12 +753,15 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response, next:
             )
             await updateClientTier(String(booking.clientId))
         } else if (newStatus === 'cancelled' && currentStatus === 'fulfilled') {
-            // Decrement visits when cancelling a fulfilled booking
-            await Client.findByIdAndUpdate(
-                booking.clientId,
-                { $inc: { visitsCount: -1 } }
-            )
-            await updateClientTier(String(booking.clientId))
+            // Decrement visits when cancelling a fulfilled booking, but never below 0
+            const client = await Client.findById(booking.clientId)
+            if (client && client.visitsCount > 0) {
+                await Client.findByIdAndUpdate(
+                    booking.clientId,
+                    { $inc: { visitsCount: -1 } }
+                )
+                await updateClientTier(String(booking.clientId))
+            }
         }
         
         booking.status = newStatus as any
