@@ -1,6 +1,7 @@
 // src/pages/Calendar/Calendar.tsx
 import { useEffect, useState, useCallback } from 'react'
 import { useWebSocket } from '../../lib/websocket'
+import { useAuthStore } from '../../store/authStore'
 import api from '../../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -14,34 +15,47 @@ interface BookedDate {
   count: number
 }
 
+interface BookingStatus {
+  date: string
+  startsAt: string
+  endsAt: string
+  procedureName: string
+  type: 'personal' | 'work'
+}
+
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [bookedDates, setBookedDates] = useState<BookedDate[]>([])
   const [fullyBookedDays, setFullyBookedDays] = useState<string[]>([])
+  const [bookingStatus, setBookingStatus] = useState<BookingStatus[]>([])
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const { lastEvent } = useWebSocket()
+  const user = useAuthStore(state => state.user)
 
   const fetchCalendarData = useCallback(async () => {
     try {
       const month = currentDate.getMonth() + 1
       const year = currentDate.getFullYear()
-      const [calendarData, availabilityData] = await Promise.all([
+      const [calendarData, availabilityData, statusData] = await Promise.all([
         api.get(`/bookings/calendar?month=${month}&year=${year}`),
-        api.get(`/bookings/availability/${year}/${month}`)
+        api.get(`/bookings/availability/${year}/${month}`),
+        api.get(`/bookings/status`)
       ])
       // Ensure data is always an array
       setBookedDates(Array.isArray(calendarData.data) ? calendarData.data : [])
       const fullyBooked = Array.isArray(availabilityData.data) ? availabilityData.data : []
       console.log('[Calendar] Fully booked days received:', fullyBooked)
       setFullyBookedDays(fullyBooked)
+      setBookingStatus(Array.isArray(statusData.data) ? statusData.data : [])
     } catch (error: any) {
       console.error('[Calendar] Error fetching data:', error)
       const errorMessage = error.response?.data?.error || 'Failed to load calendar data'
       toast('error', errorMessage)
       setBookedDates([]) // Set empty array on error
       setFullyBookedDays([])
+      setBookingStatus([])
     } finally {
       setLoading(false)
     }
@@ -129,6 +143,27 @@ export default function Calendar() {
     return dayOfWeek === 0 || dayOfWeek === 6
   }
 
+  const getStatusDots = (date: Date) => {
+    if (isPastDate(date)) return null
+    
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const hasPersonal = bookingStatus.some(
+      status => format(new Date(status.date), 'yyyy-MM-dd') === dateStr && status.type === 'personal'
+    )
+    const hasWork = bookingStatus.some(
+      status => format(new Date(status.date), 'yyyy-MM-dd') === dateStr && status.type === 'work'
+    )
+    
+    if (!hasPersonal && !hasWork) return null
+    
+    return (
+      <div className="absolute top-0.5 right-0.5 flex gap-0.5">
+        {hasPersonal && <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
+        {hasWork && <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full" />}
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -198,6 +233,7 @@ export default function Calendar() {
                     relative flex items-center justify-center
                   `}
                 >
+                  {getStatusDots(day)}
                   <div className="font-medium">{format(day, 'd')}</div>
                   {isBooked && !isPast && !isFullyBookedDay && (
                     <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 flex gap-0.5">
@@ -216,6 +252,16 @@ export default function Calendar() {
           </div>
 
           <div className="mt-3 flex items-center justify-center gap-4 text-xs text-gray-600">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span>My Bookings</span>
+            </div>
+            {(user?.role === 'worker' || user?.role === 'admin') && (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                <span>My Schedule</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-500 rounded"></div>
               <span>Fully booked</span>
@@ -239,6 +285,7 @@ export default function Calendar() {
       {showBookingModal && selectedDate && (
         <BookingModal
           date={selectedDate}
+          bookingStatus={bookingStatus}
           onClose={() => {
             setShowBookingModal(false)
             setSelectedDate(null)

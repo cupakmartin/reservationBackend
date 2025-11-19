@@ -8,7 +8,7 @@ import Select from '../../components/ui/Select'
 import TimeInput from '../../components/ui/TimeInput'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
-import { Calendar, Clock } from 'lucide-react'
+import { Calendar, Clock, AlertTriangle } from 'lucide-react'
 
 interface Procedure {
   _id: string
@@ -28,13 +28,22 @@ interface Worker {
   name: string
 }
 
+interface BookingStatus {
+  date: string
+  startsAt: string
+  endsAt: string
+  procedureName: string
+  type: 'personal' | 'work'
+}
+
 interface BookingModalProps {
   date: Date
+  bookingStatus: BookingStatus[]
   onClose: () => void
   onSuccess: () => void
 }
 
-export default function BookingModal({ date, onClose, onSuccess }: BookingModalProps) {
+export default function BookingModal({ date, bookingStatus, onClose, onSuccess }: BookingModalProps) {
   const { user } = useAuthStore()
   const [procedures, setProcedures] = useState<Procedure[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -81,6 +90,24 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
 
     fetchData()
   }, [date, user?.role, user?.id])
+
+  const getPersonalConflicts = () => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    return bookingStatus.filter(
+      status => status.type === 'personal' && format(new Date(status.date), 'yyyy-MM-dd') === dateStr
+    )
+  }
+
+  const getWorkConflicts = () => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    return bookingStatus.filter(
+      status => status.type === 'work' && format(new Date(status.date), 'yyyy-MM-dd') === dateStr
+    )
+  }
+
+  const formatTime = (isoString: string) => {
+    return format(new Date(isoString), 'HH:mm')
+  }
 
   // Fetch worker schedule when worker is selected
   useEffect(() => {
@@ -201,6 +228,57 @@ export default function BookingModal({ date, onClose, onSuccess }: BookingModalP
             <Calendar className="h-5 w-5 mr-2 text-blue-600" />
             Create New Booking
           </h3>
+
+          {getPersonalConflicts().length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-yellow-800 text-sm">Personal Booking Conflict</p>
+                  {getPersonalConflicts().map((conflict, idx) => (
+                    <p key={idx} className="text-yellow-700 text-sm mt-1">
+                      You have a personal booking: {conflict.procedureName} at {formatTime(conflict.startsAt)} - {formatTime(conflict.endsAt)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(user?.role === 'worker' || user?.role === 'admin') && getWorkConflicts().length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-blue-800 text-sm">Work Schedule Conflict</p>
+                  {getWorkConflicts().map((conflict, idx) => (
+                    <p key={idx} className="text-blue-700 text-sm mt-1">
+                      You are working: {conflict.procedureName} at {formatTime(conflict.startsAt)} - {formatTime(conflict.endsAt)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {formData.workerId && workerSchedule.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <div className="flex items-start">
+                <Clock className="h-5 w-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-800 text-sm">Selected Worker is Busy</p>
+                  <div className="text-red-700 text-sm mt-1">
+                    {workerSchedule.map((slot, idx) => (
+                      <span key={idx}>
+                        {formatTime(slot.startsAt)} - {formatTime(slot.endsAt)}
+                        {idx < workerSchedule.length - 1 && ', '}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {user?.role === 'admin' && (
             <Select

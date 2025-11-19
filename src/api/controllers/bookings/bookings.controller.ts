@@ -308,9 +308,13 @@ export const getWorkerScheduleForDay = async (req: AuthRequest, res: Response, n
         const endOfDay = new Date(dateStr);
         endOfDay.setHours(23, 59, 59, 999);
         
-        // Find all bookings for this worker on this day
+        // Find ALL bookings where this user is occupied (as worker OR client)
         const bookings = await Booking.find({
-            workerId,
+            $or: [
+                { workerId },
+                { clientId: workerId }
+            ],
+            status: { $ne: 'cancelled' },
             startsAt: {
                 $gte: startOfDay,
                 $lte: endOfDay
@@ -492,6 +496,7 @@ const hasOverlappingBooking = async (
 ): Promise<boolean> => {
     const query: any = {
         workerId,
+        status: { $ne: 'cancelled' },
         $or: [
             // New booking starts during an existing booking
             { startsAt: { $lte: startsAt }, endsAt: { $gt: startsAt } },
@@ -509,6 +514,37 @@ const hasOverlappingBooking = async (
 
     const overlappingBooking = await Booking.findOne(query);
     return !!overlappingBooking;
+};
+
+const hasUserConflict = async (
+    userId: string,
+    startsAt: Date,
+    endsAt: Date,
+    excludeBookingId?: string
+): Promise<boolean> => {
+    const query: any = {
+        $or: [
+            { workerId: userId },
+            { clientId: userId }
+        ],
+        status: { $ne: 'cancelled' },
+        $and: [
+            {
+                $or: [
+                    { startsAt: { $lte: startsAt }, endsAt: { $gt: startsAt } },
+                    { startsAt: { $lt: endsAt }, endsAt: { $gte: endsAt } },
+                    { startsAt: { $gte: startsAt }, endsAt: { $lte: endsAt } }
+                ]
+            }
+        ]
+    };
+
+    if (excludeBookingId) {
+        query._id = { $ne: excludeBookingId };
+    }
+
+    const conflictingBooking = await Booking.findOne(query);
+    return !!conflictingBooking;
 };
 
 export const createBooking = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -531,15 +567,27 @@ export const createBooking = async (req: AuthRequest, res: Response, next: NextF
         const startsAt = new Date(req.body.startsAt);
         const endsAt = new Date(req.body.endsAt);
         
-        const hasOverlap = await hasOverlappingBooking(
+        const workerConflict = await hasUserConflict(
             req.body.workerId,
             startsAt,
             endsAt
         );
 
-        if (hasOverlap) {
+        if (workerConflict) {
             return res.status(409).json({ 
-                error: 'Worker already has a booking during this time slot. Please choose a different time or worker.' 
+                error: 'Worker is not available during this time slot. Please choose a different time or worker.' 
+            });
+        }
+
+        const clientConflict = await hasUserConflict(
+            clientId,
+            startsAt,
+            endsAt
+        );
+
+        if (clientConflict) {
+            return res.status(409).json({ 
+                error: 'You already have a booking during this time slot. Please choose a different time.' 
             });
         }
         
@@ -618,16 +666,30 @@ export const updateBooking = async (req: AuthRequest, res: Response, next: NextF
             const endsAt = req.body.endsAt ? new Date(req.body.endsAt) : existingBooking.endsAt;
             const workerId = req.body.workerId || existingBooking.workerId.toString();
 
-            const hasOverlap = await hasOverlappingBooking(
+            const workerConflict = await hasUserConflict(
                 workerId,
                 startsAt,
                 endsAt,
                 req.params.id
             );
 
-            if (hasOverlap) {
+            if (workerConflict) {
                 return res.status(409).json({ 
-                    error: 'Worker already has a booking during this time slot. Please choose a different time or worker.' 
+                    error: 'Worker is not available during this time slot. Please choose a different time or worker.' 
+                });
+            }
+
+            const clientId = existingBooking.clientId.toString();
+            const clientConflict = await hasUserConflict(
+                clientId,
+                startsAt,
+                endsAt,
+                req.params.id
+            );
+
+            if (clientConflict) {
+                return res.status(409).json({ 
+                    error: 'Client already has a booking during this time slot. Please choose a different time.' 
                 });
             }
         }
@@ -905,6 +967,58 @@ export const getWorkerDashboardStats = async (req: AuthRequest, res: Response, n
         ]);
         
         res.json({ personalStats, workStats });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export const getUserCalendarStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user?.userId;
+        const userRole = req.user?.role;
+        
+        if (!userId) {
+            res.status(401).json({ error: 'User ID not found' });
+            return;
+        }
+        
+        const personalBookings = await Booking.find({
+            clientId: new mongoose.Types.ObjectId(userId),
+            status: { $ne: 'cancelled' }
+        })
+        .select('startsAt endsAt')
+        .populate('procedureId', 'name')
+        .sort({ startsAt: 1 });
+        
+        const personalDates = personalBookings.map(booking => ({
+            date: booking.startsAt.toISOString(),
+            startsAt: booking.startsAt.toISOString(),
+            endsAt: booking.endsAt.toISOString(),
+            procedureName: (booking.procedureId as any)?.name || 'Unknown',
+            type: 'personal' as const
+        }));
+        
+        let workDates: any[] = [];
+        
+        if (userRole === 'worker' || userRole === 'admin') {
+            const workBookings = await Booking.find({
+                workerId: new mongoose.Types.ObjectId(userId),
+                status: { $ne: 'cancelled' }
+            })
+            .select('startsAt endsAt')
+            .populate('procedureId', 'name')
+            .sort({ startsAt: 1 });
+            
+            workDates = workBookings.map(booking => ({
+                date: booking.startsAt.toISOString(),
+                startsAt: booking.startsAt.toISOString(),
+                endsAt: booking.endsAt.toISOString(),
+                procedureName: (booking.procedureId as any)?.name || 'Unknown',
+                type: 'work' as const
+            }));
+        }
+        
+        res.json([...personalDates, ...workDates]);
     } catch (error) {
         next(error);
     }
