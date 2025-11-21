@@ -11,13 +11,12 @@ npm-debug.log*
 .env.local
 .env.*.local
 
+# Dev notes
+*.md
 # OS/IDE
 .DS_Store
 .idea/
 .vscode/
-
-# Dev notes
-*.md
 
 # Debug/HTTP requests output
 debug-requests/*.response.json
