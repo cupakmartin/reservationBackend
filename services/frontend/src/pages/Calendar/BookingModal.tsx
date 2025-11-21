@@ -254,25 +254,8 @@ export default function BookingModal({ date, bookingStatus, onClose, onSuccess }
   return (
     <Modal onClose={onClose} title={format(date, 'd MMMM yyyy')}>
       <div className="space-y-6">
-        {/* Worker Schedule */}
-        {formData.workerId && workerSchedule.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="font-semibold text-gray-900">Worker is busy:</h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {workerSchedule.map((slot, index) => (
-                <div key={index} className="flex items-center text-sm bg-gray-50 rounded px-3 py-2">
-                  <Clock className="h-4 w-4 mr-2 text-gray-500" />
-                  <span>
-                    {format(new Date(slot.startsAt), 'HH:mm')} - {format(new Date(slot.endsAt), 'HH:mm')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Create New Booking */}
-        <div className={formData.workerId && workerSchedule.length > 0 ? 'border-t pt-6 space-y-4' : 'space-y-4'}>
+        <div className="space-y-4">
           <h3 className="font-semibold text-gray-900 flex items-center">
             <Calendar className="h-5 w-5 mr-2 text-blue-600" />
             Create New Booking

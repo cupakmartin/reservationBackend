@@ -23,13 +23,13 @@ services:
   data-api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: salon-data-api
     restart: unless-stopped
     ports:
       - "4000:4000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=4000
       - MONGO_URI=mongodb://mongo-db:27017/salon
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
@@ -43,19 +43,21 @@ services:
     networks:
       - salon-network
     volumes:
+      - ./src:/app/src
       - ./public:/app/public
+      - /app/node_modules
 
   # Mailing Service
   mailing-service:
     build:
       context: ./services/mailing-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: salon-mailing-service
     restart: unless-stopped
     ports:
       - "4001:4001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=4001
       - SMTP_HOST=${SMTP_HOST:-smtp.ethereal.email}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -63,20 +65,29 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
     networks:
       - salon-network
+    volumes:
+      - ./services/mailing-service:/app
+      - /app/node_modules
 
   # Frontend
   frontend:
     build:
       context: ./services/frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: salon-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "80:5173"
+    environment:
+      - NODE_ENV=development
     depends_on:
       - data-api
     networks:
       - salon-network
+    volumes:
+      - ./services/frontend/src:/app/src
+      - ./services/frontend/public:/app/public
+      - /app/node_modules
 
 networks:
   salon-network:

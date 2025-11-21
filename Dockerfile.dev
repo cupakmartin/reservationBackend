@@ -1,0 +1,22 @@
+# Main Data API Development Dockerfile with Hot Reloading
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY nodemon.json ./
+
+# Install ALL dependencies (including devDependencies for nodemon/ts-node)
+RUN npm install
+
+# Copy source code (will be overridden by volume mount)
+COPY . .
+
+# Expose port
+EXPOSE 4000
+
+# Start with nodemon for hot reloading
+CMD ["npm", "run", "dev:watch"]

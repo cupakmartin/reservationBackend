@@ -6,6 +6,7 @@ import { Card, CardContent } from '../../components/ui/Card'
 import Avatar from '../../components/ui/Avatar'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+import Select from '../../components/ui/Select'
 import { toast } from '../../components/ui/Toast'
 import { format } from 'date-fns'
 import { Star, TrendingUp, Award, Users, Filter, X } from 'lucide-react'
@@ -60,6 +61,9 @@ export default function Reviews() {
   })
   const [loading, setLoading] = useState(true)
   const [workerFilter, setWorkerFilter] = useState('')
+  const [ratingFilter, setRatingFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [showFilter, setShowFilter] = useState(false)
 
   const isAdmin = user?.role === 'admin'
@@ -67,8 +71,15 @@ export default function Reviews() {
   const fetchReviews = async () => {
     try {
       const endpoint = isAdmin ? '/reviews/all-reviews' : '/reviews/my-reviews'
-      const params = isAdmin && workerFilter ? `?workerName=${workerFilter}` : ''
-      const { data } = await api.get(`${endpoint}${params}`)
+      const params = new URLSearchParams()
+      
+      if (isAdmin && workerFilter) params.append('workerName', workerFilter)
+      if (ratingFilter) params.append('rating', ratingFilter)
+      if (dateFrom) params.append('dateFrom', dateFrom)
+      if (dateTo) params.append('dateTo', dateTo)
+      
+      const queryString = params.toString()
+      const { data } = await api.get(`${endpoint}${queryString ? `?${queryString}` : ''}`)
       
       setReviews(data.reviews)
       setStats(data.stats)
@@ -92,6 +103,9 @@ export default function Reviews() {
 
   const handleClearFilter = () => {
     setWorkerFilter('')
+    setRatingFilter('')
+    setDateFrom('')
+    setDateTo('')
     setLoading(true)
     setTimeout(() => fetchReviews(), 0)
   }
@@ -131,35 +145,60 @@ export default function Reviews() {
         <h1 className="text-3xl font-bold text-gray-900">
           {isAdmin ? 'All Reviews' : 'My Reviews'}
         </h1>
-        {isAdmin && (
-          <Button
-            variant={showFilter ? 'secondary' : 'primary'}
-            size="sm"
-            onClick={() => setShowFilter(!showFilter)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            {showFilter ? 'Hide Filter' : 'Filter'}
-          </Button>
-        )}
+        <Button
+          variant={showFilter ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={() => setShowFilter(!showFilter)}
+        >
+          <Filter className="h-4 w-4 mr-2" />
+          {showFilter ? 'Hide Filters' : 'Show Filters'}
+        </Button>
       </div>
 
-      {/* Admin Filter */}
-      {isAdmin && showFilter && (
+      {/* Filters */}
+      {showFilter && (
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {isAdmin && (
                 <Input
                   label="Worker Name"
                   value={workerFilter}
                   onChange={(e) => setWorkerFilter(e.target.value)}
                   placeholder="Search by worker name..."
                 />
-              </div>
-              <Button onClick={handleApplyFilter}>Apply</Button>
+              )}
+              <Select
+                label="Rating"
+                value={ratingFilter}
+                onChange={(e) => setRatingFilter(e.target.value)}
+                options={[
+                  { value: '', label: 'All Ratings' },
+                  { value: '5', label: '5 Stars' },
+                  { value: '4', label: '4 Stars' },
+                  { value: '3', label: '3 Stars' },
+                  { value: '2', label: '2 Stars' },
+                  { value: '1', label: '1 Star' }
+                ]}
+              />
+              <Input
+                label="Date From"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <Input
+                label="Date To"
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleApplyFilter} className="flex-1">Apply Filters</Button>
               <Button variant="secondary" onClick={handleClearFilter}>
                 <X className="h-4 w-4 mr-2" />
-                Clear
+                Clear All
               </Button>
             </div>
           </CardContent>

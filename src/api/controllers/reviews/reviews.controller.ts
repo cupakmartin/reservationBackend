@@ -99,8 +99,29 @@ export const getBookingReview = async (req: AuthRequest, res: Response, next: Ne
 export const getMyReviews = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const workerId = req.user?.userId
+        const { rating, dateFrom, dateTo } = req.query
 
-        const reviews = await Review.find({ workerId })
+        const query: any = { workerId }
+
+        // Filter by rating if provided
+        if (rating) {
+            query.rating = parseInt(String(rating))
+        }
+
+        // Filter by date range if provided
+        if (dateFrom || dateTo) {
+            query.createdAt = {}
+            if (dateFrom) {
+                query.createdAt.$gte = new Date(String(dateFrom))
+            }
+            if (dateTo) {
+                const endDate = new Date(String(dateTo))
+                endDate.setHours(23, 59, 59, 999)
+                query.createdAt.$lte = endDate
+            }
+        }
+
+        const reviews = await Review.find(query)
             .populate('clientId', 'name email avatarUrl')
             .populate('bookingId', 'startsAt procedureId')
             .sort({ createdAt: -1 })
@@ -153,7 +174,7 @@ export const getMyReviews = async (req: AuthRequest, res: Response, next: NextFu
 
 export const getAllReviews = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        const { workerName } = req.query
+        const { workerName, rating, dateFrom, dateTo } = req.query
 
         let query: any = {}
 
@@ -166,6 +187,24 @@ export const getAllReviews = async (req: AuthRequest, res: Response, next: NextF
             }).select('_id')
             const workerIds = workers.map(w => w._id)
             query.workerId = { $in: workerIds }
+        }
+
+        // Filter by rating if provided
+        if (rating) {
+            query.rating = parseInt(String(rating))
+        }
+
+        // Filter by date range if provided
+        if (dateFrom || dateTo) {
+            query.createdAt = {}
+            if (dateFrom) {
+                query.createdAt.$gte = new Date(String(dateFrom))
+            }
+            if (dateTo) {
+                const endDate = new Date(String(dateTo))
+                endDate.setHours(23, 59, 59, 999)
+                query.createdAt.$lte = endDate
+            }
         }
 
         const reviews = await Review.find(query)

@@ -4,140 +4,45 @@ import { Procedure } from '../../../database/models/procedure.model'
 import { Material } from '../../../database/models/material.model'
 import { Client } from '../../../database/models/client.model'
 import { updateClientTier } from '../../../services/loyalty.service'
-import { sendEmail } from '../../../services/mailing.service'
 import { emitBookingUpdate } from '../../../websocket'
 import { AuthRequest } from '../../../middleware/auth'
 import mongoose from 'mongoose'
+import { populateWorkerData } from './helpers/population.helpers'
+import { createDateRange, createDateRangeFilter } from './helpers/date.helpers'
+import { getClientIdsByName, getWorkerIdsByName } from './helpers/filter.helpers'
+import { createSortOption, sortByPopulatedField } from './helpers/sort.helpers'
+import { hasUserConflict } from './helpers/conflict.helpers'
+import { calculateFinalPrice } from './helpers/pricing.helpers'
+import { sendBookingNotifications } from './helpers/notification.helpers'
+import { validateObjectId, checkClientAccess } from './helpers/validation.helpers'
 
 export const getAllBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const { date, clientName, workerName, dateFrom, dateTo, sortBy = 'createdAt', order = 'desc' } = req.query;
         
-        // Build filter query
-        const filter: Record<string, unknown> = {};
+        const filter = buildFilter(date, dateFrom, dateTo);
+        let bookingsQuery = Booking.find(filter).populate('clientId').populate('procedureId');
         
-        // If date is provided, allow all authenticated users to see bookings for that date
-        if (date) {
-            const dateStr = String(date);
-            const startOfDay = new Date(dateStr);
-            const endOfDay = new Date(dateStr);
-            endOfDay.setHours(23, 59, 59, 999);
-            
-            filter.startsAt = {
-                $gte: startOfDay,
-                $lte: endOfDay
-            };
-        } else {
-            // Date range filtering
-            if (dateFrom || dateTo) {
-                filter.startsAt = {};
-                if (dateFrom) {
-                    (filter.startsAt as Record<string, Date>).$gte = new Date(String(dateFrom));
-                }
-                if (dateTo) {
-                    const endDate = new Date(String(dateTo));
-                    endDate.setHours(23, 59, 59, 999);
-                    (filter.startsAt as Record<string, Date>).$lte = endDate;
-                }
-            }
-        }
-        
-        // Get bookings with filter - DON'T populate workerId to preserve ObjectId when worker deleted
-        let bookingsQuery = Booking.find(filter)
-            .populate('clientId')
-            .populate('procedureId');
-        
-        // Apply client name filter
         if (clientName) {
-            const clients = await Client.find({
-                name: { $regex: String(clientName), $options: 'i' }
-            }).select('_id');
-            const clientIds = clients.map(c => c._id);
+            const clientIds = await getClientIdsByName(String(clientName));
             bookingsQuery = bookingsQuery.where('clientId').in(clientIds);
         }
         
-        // Apply worker name filter
         if (workerName) {
-            const workers = await Client.find({
-                name: { $regex: String(workerName), $options: 'i' },
-                role: 'worker'
-            }).select('_id');
-            const workerIds = workers.map(w => w._id);
+            const workerIds = await getWorkerIdsByName(String(workerName));
             bookingsQuery = bookingsQuery.where('workerId').in(workerIds);
         }
         
-        // Handle sorting
-        let sortOption: Record<string, 1 | -1> = {};
-        const sortOrder = order === 'asc' ? 1 : -1;
+        bookingsQuery = applySorting(bookingsQuery, sortBy as string, order as string);
         
-        switch (sortBy) {
-            case 'clientName':
-                // Will sort after population
-                break;
-            case 'workerName':
-                // Will sort after population
-                break;
-            case 'price':
-                sortOption = { finalPrice: sortOrder };
-                break;
-            case 'duration':
-                // Will sort after population based on procedure duration
-                break;
-            case 'createdAt':
-                sortOption = { createdAt: sortOrder };
-                break;
-            case 'startsAt':
-            default:
-                sortOption = { startsAt: sortOrder };
-                break;
-        }
-        
-        if (Object.keys(sortOption).length > 0) {
-            bookingsQuery = bookingsQuery.sort(sortOption);
-        }
-        
-        // Apply limit only when not filtering by specific date
         if (!date) {
             bookingsQuery = bookingsQuery.limit(500);
         }
         
         let bookings = await bookingsQuery.exec();
+        const enrichedBookings = await populateWorkerData(bookings);
         
-        // Manually populate workerId to handle deleted workers gracefully
-        const workerIds = [...new Set(bookings.map(b => b.workerId).filter(Boolean))];
-        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
-        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
-        
-        // Enrich bookings with worker data
-        const enrichedBookings = bookings.map(booking => {
-            const bookingObj = booking.toObject();
-            if (bookingObj.workerId) {
-                const worker = workerMap.get(bookingObj.workerId.toString());
-                (bookingObj.workerId as any) = worker || null; // null if worker was deleted
-            }
-            return bookingObj;
-        });
-        
-        // Post-query sorting for populated fields
-        if (sortBy === 'clientName') {
-            enrichedBookings.sort((a, b) => {
-                const nameA = (a.clientId as any)?.name?.toLowerCase() || '';
-                const nameB = (b.clientId as any)?.name?.toLowerCase() || '';
-                return sortOrder === 1 ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-            });
-        } else if (sortBy === 'workerName') {
-            enrichedBookings.sort((a, b) => {
-                const nameA = (a.workerId as any)?.name?.toLowerCase() || '';
-                const nameB = (b.workerId as any)?.name?.toLowerCase() || '';
-                return sortOrder === 1 ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
-            });
-        } else if (sortBy === 'duration') {
-            enrichedBookings.sort((a, b) => {
-                const durA = (a.procedureId as any)?.durationMin || 0;
-                const durB = (b.procedureId as any)?.durationMin || 0;
-                return sortOrder === 1 ? durA - durB : durB - durA;
-            });
-        }
+        sortByPopulatedField(enrichedBookings, sortBy as string, order as string);
         
         res.json(enrichedBookings);
     } catch (error) {
@@ -145,12 +50,49 @@ export const getAllBookings = async (req: AuthRequest, res: Response, next: Next
     }
 }
 
+const buildFilter = (date: any, dateFrom: any, dateTo: any) => {
+    const filter: Record<string, unknown> = {};
+    
+    if (date) {
+        const { startOfDay, endOfDay } = createDateRange(String(date));
+        filter.startsAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (dateFrom || dateTo) {
+        filter.startsAt = createDateRangeFilter(
+            dateFrom ? String(dateFrom) : undefined,
+            dateTo ? String(dateTo) : undefined
+        );
+    }
+    
+    return filter;
+}
+
+const applyFilters = async (query: any, clientName: any, workerName: any) => {
+    if (clientName) {
+        const clientIds = await getClientIdsByName(String(clientName));
+        query = query.where('clientId').in(clientIds);
+    }
+    
+    if (workerName) {
+        const workerIds = await getWorkerIdsByName(String(workerName));
+        query = query.where('workerId').in(workerIds);
+    }
+    
+    return query;
+}
+
+const applySorting = (query: any, sortBy: string, order: string) => {
+    if (!['clientName', 'workerName', 'duration'].includes(sortBy)) {
+        const sortOption = createSortOption(sortBy, order);
+        if (Object.keys(sortOption).length > 0) {
+            query = query.sort(sortOption);
+        }
+    }
+    return query;
+}
+
 export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // Convert userId to ObjectId for comparison since workerId can be Mixed type
         const workerObjectId = new mongoose.Types.ObjectId(req.user?.userId);
-        
-        console.log('[getWorkerSchedule] Looking for bookings with workerId:', workerObjectId.toString());
         
         const bookings = await Booking.find({ 
             workerId: workerObjectId,
@@ -161,36 +103,15 @@ export const getWorkerSchedule = async (req: AuthRequest, res: Response, next: N
             .sort({ startsAt: 1 })
             .lean();
         
-        console.log('[getWorkerSchedule] Found', bookings.length, 'bookings');
-        console.log('[getWorkerSchedule] Sample workerId values:', bookings.slice(0, 2).map(b => ({ 
-            bookingId: b._id, 
-            workerId: (b as any).workerId,
-            workerIdType: typeof (b as any).workerId 
-        })));
-        
-        // Manually populate workerId
-        const workerIds = [...new Set(bookings.map(b => (b as any).workerId).filter(Boolean))];
-        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
-        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
-        
-        const enrichedBookings = bookings.map(booking => {
-            if ((booking as any).workerId) {
-                const worker = workerMap.get((booking as any).workerId.toString());
-                (booking as any).workerId = worker || null;
-            }
-            return booking;
-        });
-        
+        const enrichedBookings = await populateWorkerData(bookings);
         res.json(enrichedBookings);
     } catch (error) {
-        console.error('[getWorkerSchedule] Error:', error);
         next(error);
     }
 }
 
 export const getClientBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // Exclude fulfilled bookings - those appear in "Completed Bookings" page
         const bookings = await Booking.find({ 
             clientId: req.user?.userId,
             status: { $ne: 'fulfilled' }
@@ -200,19 +121,7 @@ export const getClientBookings = async (req: AuthRequest, res: Response, next: N
             .sort({ startsAt: -1 })
             .lean();
         
-        // Manually populate workerId
-        const workerIds = [...new Set(bookings.map(b => b.workerId).filter(Boolean))];
-        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
-        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
-        
-        const enrichedBookings = bookings.map(booking => {
-            if (booking.workerId) {
-                const worker = workerMap.get(booking.workerId.toString());
-                (booking.workerId as any) = worker || null;
-            }
-            return booking;
-        });
-        
+        const enrichedBookings = await populateWorkerData(bookings);
         res.json(enrichedBookings);
     } catch (error) {
         next(error);
@@ -221,84 +130,55 @@ export const getClientBookings = async (req: AuthRequest, res: Response, next: N
 
 export const getCompletedSchedule = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        const userId = req.user?.userId;
-        const userRole = req.user?.role;
         const { clientName, date, dateRangeStart, dateRangeEnd, priceSort } = req.query;
         
-        // Build filter based on user role
-        const filter: Record<string, unknown> = {
-            status: 'fulfilled'
-        };
-        
-        // For clients, show their completed bookings
-        // For workers, show bookings they worked on
-        if (userRole === 'client') {
-            filter.clientId = userId;
-        } else {
-            filter.workerId = userId;
-        }
-        
-        if (date) {
-            const dateStr = String(date);
-            const startOfDay = new Date(dateStr);
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date(dateStr);
-            endOfDay.setHours(23, 59, 59, 999);
-            
-            filter.startsAt = {
-                $gte: startOfDay,
-                $lte: endOfDay
-            };
-        } else if (dateRangeStart || dateRangeEnd) {
-            filter.startsAt = {};
-            if (dateRangeStart) {
-                (filter.startsAt as Record<string, Date>).$gte = new Date(String(dateRangeStart));
-            }
-            if (dateRangeEnd) {
-                const endDate = new Date(String(dateRangeEnd));
-                endDate.setHours(23, 59, 59, 999);
-                (filter.startsAt as Record<string, Date>).$lte = endDate;
-            }
-        }
-        
-        let bookingsQuery = Booking.find(filter)
-            .populate('clientId')
-            .populate('procedureId');
+        const filter = buildCompletedFilter(req.user, date, dateRangeStart, dateRangeEnd);
+        let bookingsQuery = Booking.find(filter).populate('clientId').populate('procedureId');
         
         if (clientName) {
-            const clients = await Client.find({
-                name: { $regex: String(clientName), $options: 'i' }
-            }).select('_id');
-            const clientIds = clients.map(c => c._id);
+            const clientIds = await getClientIdsByName(String(clientName));
             bookingsQuery = bookingsQuery.where('clientId').in(clientIds);
         }
         
-        if (priceSort) {
-            const sortOrder = priceSort === 'asc' ? 1 : -1;
-            bookingsQuery = bookingsQuery.sort({ finalPrice: sortOrder });
-        } else {
-            bookingsQuery = bookingsQuery.sort({ startsAt: -1 });
-        }
+        bookingsQuery = applyCompletedSort(bookingsQuery, priceSort);
         
         const bookings = await bookingsQuery.lean();
-        
-        // Manually populate workerId
-        const workerIds = [...new Set(bookings.map((b: any) => b.workerId).filter(Boolean))];
-        const workers = await Client.find({ _id: { $in: workerIds } }).select('_id name');
-        const workerMap = new Map(workers.map(w => [(w._id as any).toString(), w]));
-        
-        const enrichedBookings = bookings.map((booking: any) => {
-            if (booking.workerId) {
-                const worker = workerMap.get(booking.workerId.toString());
-                booking.workerId = worker || null;
-            }
-            return booking;
-        });
+        const enrichedBookings = await populateWorkerData(bookings);
         
         res.json(enrichedBookings);
     } catch (error) {
         next(error);
     }
+}
+
+const buildCompletedFilter = (user: any, date: any, dateRangeStart: any, dateRangeEnd: any) => {
+    const filter: Record<string, unknown> = { status: 'fulfilled' };
+    
+    if (user?.role === 'client') {
+        filter.clientId = user.userId;
+    } else {
+        filter.workerId = user.userId;
+    }
+    
+    if (date) {
+        const { startOfDay, endOfDay } = createDateRange(String(date));
+        filter.startsAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (dateRangeStart || dateRangeEnd) {
+        filter.startsAt = createDateRangeFilter(
+            dateRangeStart ? String(dateRangeStart) : undefined,
+            dateRangeEnd ? String(dateRangeEnd) : undefined
+        );
+    }
+    
+    return filter;
+}
+
+const applyCompletedSort = (query: any, priceSort: any) => {
+    if (priceSort) {
+        const sortOrder = priceSort === 'asc' ? 1 : -1;
+        return query.sort({ finalPrice: sortOrder });
+    }
+    return query.sort({ startsAt: -1 });
 }
 
 export const getWorkerScheduleForDay = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -479,8 +359,8 @@ const isDayFullyBooked = async (
 
 export const getBookingById = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-            return res.status(404).json({ error: 'Booking not found' });
+        if (!validateObjectId(req.params.id, res, 'Booking')) {
+            return;
         }
         
         const booking = await Booking.findById(req.params.id);
@@ -489,9 +369,8 @@ export const getBookingById = async (req: AuthRequest, res: Response, next: Next
             return res.status(404).json({ error: 'Booking not found' });
         }
         
-        // Clients can only view their own bookings
-        if (req.user?.role === 'client' && booking.clientId.toString() !== req.user.userId) {
-            return res.status(403).json({ error: 'Access denied' });
+        if (req.user?.role === 'client' && !checkClientAccess(booking, req.user.userId, res)) {
+            return;
         }
         
         res.json(booking);
@@ -500,155 +379,77 @@ export const getBookingById = async (req: AuthRequest, res: Response, next: Next
     }
 }
 
-// Helper function to check for overlapping bookings
-const hasOverlappingBooking = async (
-    workerId: string,
-    startsAt: Date,
-    endsAt: Date,
-    excludeBookingId?: string
-): Promise<boolean> => {
-    const query: any = {
-        workerId,
-        status: { $ne: 'cancelled' },
-        $or: [
-            // New booking starts during an existing booking
-            { startsAt: { $lte: startsAt }, endsAt: { $gt: startsAt } },
-            // New booking ends during an existing booking
-            { startsAt: { $lt: endsAt }, endsAt: { $gte: endsAt } },
-            // New booking completely contains an existing booking
-            { startsAt: { $gte: startsAt }, endsAt: { $lte: endsAt } }
-        ]
-    };
-
-    // Exclude current booking when updating
-    if (excludeBookingId) {
-        query._id = { $ne: excludeBookingId };
-    }
-
-    const overlappingBooking = await Booking.findOne(query);
-    return !!overlappingBooking;
-};
-
-const hasUserConflict = async (
-    userId: string,
-    startsAt: Date,
-    endsAt: Date,
-    excludeBookingId?: string
-): Promise<boolean> => {
-    const query: any = {
-        $or: [
-            { workerId: userId },
-            { clientId: userId }
-        ],
-        status: { $ne: 'cancelled' },
-        $and: [
-            {
-                $or: [
-                    { startsAt: { $lte: startsAt }, endsAt: { $gt: startsAt } },
-                    { startsAt: { $lt: endsAt }, endsAt: { $gte: endsAt } },
-                    { startsAt: { $gte: startsAt }, endsAt: { $lte: endsAt } }
-                ]
-            }
-        ]
-    };
-
-    if (excludeBookingId) {
-        query._id = { $ne: excludeBookingId };
-    }
-
-    const conflictingBooking = await Booking.findOne(query);
-    return !!conflictingBooking;
-};
-
 export const createBooking = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // If the user is a client, force the booking to be for themselves
-        const clientId = req.user?.role === 'client' ? req.user.userId : req.body.clientId
+        const clientId = req.user?.role === 'client' ? req.user.userId : req.body.clientId;
         
-        // Fetch client and procedure for discount calculation
-        const client = await Client.findById(clientId)
-        if (!client) {
-            return res.status(404).json({ error: 'Client not found' })
+        const { client, procedure } = await fetchBookingEntities(clientId, req.body.procedureId, res);
+        if (!client || !procedure) return;
+        
+        const { startsAt, endsAt } = extractDates(req.body);
+        
+        if (await checkBookingConflicts(req.body.workerId, clientId, startsAt, endsAt, res)) {
+            return;
         }
         
-        const procedure = await Procedure.findById(req.body.procedureId)
-        if (!procedure) {
-            return res.status(404).json({ error: 'Procedure not found' })
-        }
-
-        // Check for overlapping bookings for the worker
-        const startsAt = new Date(req.body.startsAt);
-        const endsAt = new Date(req.body.endsAt);
-        
-        const workerConflict = await hasUserConflict(
-            req.body.workerId,
-            startsAt,
-            endsAt
-        );
-
-        if (workerConflict) {
-            return res.status(409).json({ 
-                error: 'Worker is not available during this time slot. Please choose a different time or worker.' 
-            });
-        }
-
-        const clientConflict = await hasUserConflict(
-            clientId,
-            startsAt,
-            endsAt
-        );
-
-        if (clientConflict) {
-            return res.status(409).json({ 
-                error: 'You already have a booking during this time slot. Please choose a different time.' 
-            });
-        }
-        
-        // Calculate discount based on loyalty tier
-        const discountPercent = getDiscountForTier(client.loyaltyTier)
-        const finalPrice = procedure.price * (1 - discountPercent)
-        
-        const bookingData = {
-            ...req.body,
-            clientId,
-            finalPrice
-        }
-        
-        console.log('[createBooking] Creating booking with data:', {
-            clientId: bookingData.clientId,
-            workerId: bookingData.workerId,
-            workerIdType: typeof bookingData.workerId,
-            procedureId: bookingData.procedureId,
-            startsAt: bookingData.startsAt
-        });
+        const finalPrice = calculateFinalPrice(procedure.price, client.loyaltyTier);
+        const bookingData = { ...req.body, clientId, finalPrice };
         
         const booking = await Booking.create(bookingData);
-        
-        console.log('[createBooking] Booking created:', {
-            _id: booking._id,
-            workerId: (booking as any).workerId,
-            workerIdType: typeof (booking as any).workerId
-        });
-        
         await sendBookingNotifications(booking);
+        emitBookingUpdate('created', booking);
         
-        // Emit WebSocket event
-        emitBookingUpdate('created', booking)
-        
-        res.status(201).json(booking)
+        res.status(201).json(booking);
     } catch (error) {
-        next(error)
+        next(error);
     }
 }
 
-const getDiscountForTier = (tier: string | null): number => {
-    switch (tier) {
-        case 'Gold': return 0.2
-        case 'Silver': return 0.1
-        case 'Bronze': return 0.05
-        case 'Worker': return 0.5
-        default: return 0
+const fetchBookingEntities = async (clientId: string, procedureId: string, res: Response) => {
+    const client = await Client.findById(clientId);
+    if (!client) {
+        res.status(404).json({ error: 'Client not found' });
+        return {};
     }
+    
+    const procedure = await Procedure.findById(procedureId);
+    if (!procedure) {
+        res.status(404).json({ error: 'Procedure not found' });
+        return {};
+    }
+    
+    return { client, procedure };
+}
+
+const extractDates = (body: any) => ({
+    startsAt: new Date(body.startsAt),
+    endsAt: new Date(body.endsAt)
+})
+
+const checkBookingConflicts = async (
+    workerId: string,
+    clientId: string,
+    startsAt: Date,
+    endsAt: Date,
+    res: Response
+): Promise<boolean> => {
+    const workerConflict = await hasUserConflict(workerId, startsAt, endsAt);
+    if (workerConflict) {
+        res.status(409).json({ 
+            error: 'Worker is not available during this time slot. Please choose a different time or worker.' 
+        });
+        return true;
+    }
+
+    const clientConflict = await hasUserConflict(clientId, startsAt, endsAt);
+    if (clientConflict) {
+        res.status(409).json({ 
+            error: 'You already have a booking during this time slot. Please choose a different time.' 
+        });
+        return true;
+    }
+    
+    return false;
 }
 
 export const updateBooking = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -746,28 +547,6 @@ export const deleteBooking = async (req: AuthRequest, res: Response, next: NextF
         res.json({ ok: true, message: 'Booking deleted' })
     } catch (error) {
         next(error)
-    }
-}
-
-const sendBookingNotifications = async (booking: any) => {
-    const client = await Client.findById(booking.clientId)
-    const clientEmail = client?.email
-    const clientName = client?.name || booking.clientId
-    
-    if (clientEmail) {
-        await sendEmail(
-            clientEmail, 
-            'Your booking', 
-            `<p>Status: <b>${booking.status}</b></p>`
-        )
-    }
-    
-    if (process.env.OWNER_EMAIL) {
-        await sendEmail(
-            process.env.OWNER_EMAIL, 
-            'New booking', 
-            `<p>Client: ${clientName}</p>`
-        )
     }
 }
 

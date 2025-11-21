@@ -21,11 +21,20 @@ export default function Avatar({ name, avatarUrl, size = 'md', className = '' }:
       .slice(0, 2)
   }
 
-  if (avatarUrl) {
+  const getAvatarUrl = (url?: string) => {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+    return `${API_BASE.replace('/api', '')}${url}`
+  }
+
+  const fullAvatarUrl = getAvatarUrl(avatarUrl)
+
+  if (fullAvatarUrl) {
     return (
       <div className={`${sizeClasses[size]} rounded-full overflow-hidden bg-gray-200 ${className}`}>
         <img 
-          src={avatarUrl} 
+          src={fullAvatarUrl} 
           alt={name} 
           className="w-full h-full object-cover"
         />
