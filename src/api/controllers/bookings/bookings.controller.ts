@@ -13,8 +13,11 @@ import { getClientIdsByName, getWorkerIdsByName } from './helpers/filter.helpers
 import { createSortOption, sortByPopulatedField } from './helpers/sort.helpers'
 import { hasUserConflict } from './helpers/conflict.helpers'
 import { calculateFinalPrice } from './helpers/pricing.helpers'
-import { sendBookingNotifications } from './helpers/notification.helpers'
+import { sendBookingNotifications, sendBookingConfirmedNotification, sendBookingCompletedNotification } from './helpers/notification.helpers'
 import { validateObjectId, checkClientAccess } from './helpers/validation.helpers'
+import axios from 'axios'
+
+const WAITLIST_SERVICE_URL = process.env.WAITLIST_SERVICE_URL || 'http://waitlist-service:4002'
 
 export const getAllBookings = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
@@ -623,6 +626,32 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response, next:
         
         if (newStatus === 'fulfilled') {
             await deductMaterialStock(String(booking.procedureId))
+            await sendBookingCompletedNotification(booking)
+        }
+        
+        // Send notification when status changes to confirmed
+        if (newStatus === 'confirmed' && currentStatus !== 'confirmed') {
+            await sendBookingConfirmedNotification(booking)
+        }
+        
+        // Notify waitlist when booking is cancelled
+        if (newStatus === 'cancelled' && currentStatus !== 'cancelled') {
+            const workerId = booking.workerId as mongoose.Types.ObjectId
+            notifyWaitlist(booking.startsAt, workerId).catch(err => 
+                console.error('Failed to notify waitlist:', err)
+            )
+        }
+        
+        // Audit log status change
+        if (req.user?.userId) {
+            const { logAudit, AuditActions } = await import('../../../utils/auditLogger')
+            logAudit({
+                actorId: req.user.userId,
+                action: AuditActions.BOOKING_STATUS_CHANGED,
+                resourceId: String(booking._id),
+                details: { previousStatus: currentStatus, newStatus },
+                ipAddress: req.ip
+            }).catch(err => console.error('Audit log failed:', err))
         }
         
         // Emit WebSocket event
@@ -880,5 +909,16 @@ export const getPerformanceAnalytics = async (req: AuthRequest, res: Response, n
         res.json(enrichedData);
     } catch (error) {
         next(error);
+    }
+}
+
+const notifyWaitlist = async (date: Date, workerId: mongoose.Types.ObjectId) => {
+    try {
+        await axios.post(`${WAITLIST_SERVICE_URL}/notify-availability`, {
+            date: date.toISOString(),
+            workerId: workerId.toString()
+        })
+    } catch (error) {
+        console.error('Waitlist notification failed:', error)
     }
 }

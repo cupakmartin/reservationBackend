@@ -35,10 +35,20 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-your-super-secret-refresh-key-change-in-production}
       - MAILING_SERVICE_URL=http://mailing-service:4001
+      - WAITLIST_SERVICE_URL=http://waitlist-service:4002
+      - PAYROLL_SERVICE_URL=http://payroll-service:4003
+      - AUDIT_SERVICE_URL=http://audit-service:4004
+      - OWNER_EMAIL=${OWNER_EMAIL:-admin@salon.test}
     depends_on:
       mongo-db:
         condition: service_healthy
       mailing-service:
+        condition: service_started
+      waitlist-service:
+        condition: service_started
+      payroll-service:
+        condition: service_started
+      audit-service:
         condition: service_started
     networks:
       - salon-network
@@ -57,10 +67,73 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4001
+      - MONGO_URI=mongodb://mongo-db:27017/salon
       - SMTP_HOST=${SMTP_HOST:-smtp.ethereal.email}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+    networks:
+      - salon-network
+
+  # Waitlist Service
+  waitlist-service:
+    build:
+      context: ./services/waitlist-service
+      dockerfile: Dockerfile
+    container_name: salon-waitlist-service
+    restart: unless-stopped
+    ports:
+      - "4002:4002"
+    environment:
+      - NODE_ENV=production
+      - PORT=4002
+      - MONGO_URI=mongodb://mongo-db:27017/salon
+      - DATA_API_URL=http://data-api:4000
+      - MAILING_SERVICE_URL=http://mailing-service:4001
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+    networks:
+      - salon-network
+
+  # Payroll Service
+  payroll-service:
+    build:
+      context: ./services/payroll-service
+      dockerfile: Dockerfile
+    container_name: salon-payroll-service
+    restart: unless-stopped
+    ports:
+      - "4003:4003"
+    environment:
+      - NODE_ENV=production
+      - PORT=4003
+      - MONGO_URI=mongodb://mongo-db:27017/salon
+    depends_on:
+      mongo-db:
+        condition: service_healthy
+    networks:
+      - salon-network
+
+  # Audit Service
+  audit-service:
+    build:
+      context: ./services/audit-service
+      dockerfile: Dockerfile
+    container_name: salon-audit-service
+    restart: unless-stopped
+    ports:
+      - "4004:4004"
+    environment:
+      - NODE_ENV=production
+      - PORT=4004
+      - MONGO_URI=mongodb://mongo-db:27017/salon
+    depends_on:
+      mongo-db:
+        condition: service_healthy
     networks:
       - salon-network
 

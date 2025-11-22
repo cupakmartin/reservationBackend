@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express'
 import { Client } from '../../../database/models/client.model'
 import { AuthRequest } from '../../../middleware/auth'
 import mongoose from 'mongoose'
+import { logAudit, AuditActions } from '../../../utils/auditLogger'
 
 interface QueryFilter {
     name?: { $regex: string; $options: string }
@@ -81,6 +82,17 @@ export const createClient = async (req: AuthRequest, res: Response, next: NextFu
     try {
         const { name, email, phone } = req.body
         const client = await Client.create({ name, email, phone })
+        
+        if (req.user?.userId) {
+            logAudit({
+                actorId: req.user.userId,
+                action: AuditActions.CLIENT_CREATED,
+                resourceId: String(client._id),
+                details: { name, email, phone },
+                ipAddress: req.ip
+            }).catch(err => console.error('Audit log failed:', err))
+        }
+        
         res.status(201).json(client)
     } catch (error) {
         next(error)
@@ -130,6 +142,16 @@ export const deleteClient = async (req: AuthRequest, res: Response, next: NextFu
             return res.status(404).json({ error: 'Client not found' })
         }
         
+        if (req.user?.userId) {
+            logAudit({
+                actorId: req.user.userId,
+                action: AuditActions.CLIENT_DELETED,
+                resourceId: id,
+                details: { name: client.name, email: client.email },
+                ipAddress: req.ip
+            }).catch(err => console.error('Audit log failed:', err))
+        }
+        
         res.json({ ok: true, message: 'Client deleted' })
     } catch (error) {
         next(error)
@@ -163,6 +185,16 @@ export const updateClientLoyalty = async (req: AuthRequest, res: Response, next:
             { $set: { loyaltyTier: tierValue, manualLoyaltyTier: true } },
             { new: true, runValidators: true }
         )
+        
+        if (req.user?.userId) {
+            logAudit({
+                actorId: req.user.userId,
+                action: AuditActions.LOYALTY_TIER_CHANGED,
+                resourceId: id,
+                details: { previousTier: client.loyaltyTier, newTier: tierValue },
+                ipAddress: req.ip
+            }).catch(err => console.error('Audit log failed:', err))
+        }
         
         res.json(updatedClient)
     } catch (error) {

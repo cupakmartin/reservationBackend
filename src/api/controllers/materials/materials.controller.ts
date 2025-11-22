@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import { Material } from '../../../database/models/material.model'
 import mongoose from 'mongoose'
+import { logAudit, AuditActions } from '../../../utils/auditLogger'
+import { AuthRequest } from '../../../middleware/auth'
 
 interface QueryFilter {
     name?: { $regex: string; $options: string }
@@ -103,7 +105,7 @@ export const updateMaterial = async (req: Request, res: Response, next: NextFunc
     }
 }
 
-export const deleteMaterial = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(404).json({ error: 'Material not found' })
@@ -113,6 +115,16 @@ export const deleteMaterial = async (req: Request, res: Response, next: NextFunc
         
         if (!material) {
             return res.status(404).json({ error: 'Material not found' })
+        }
+        
+        if (req.user?.userId) {
+            logAudit({
+                actorId: req.user.userId,
+                action: AuditActions.MATERIAL_DELETED,
+                resourceId: req.params.id,
+                details: { name: material.name, unit: material.unit },
+                ipAddress: req.ip
+            }).catch(err => console.error('Audit log failed:', err))
         }
         
         res.json({ ok: true, message: 'Material deleted' })

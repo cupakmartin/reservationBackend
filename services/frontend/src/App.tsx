@@ -19,10 +19,29 @@ import Clients from './pages/Clients/Clients'
 import Materials from './pages/Materials/Materials'
 import Analytics from './pages/Analytics/Analytics'
 import Reviews from './pages/Reviews/Reviews'
+import EmailSettings from './pages/Admin/EmailSettings/EmailSettings'
+import MyWaitlist from './pages/Dashboard/MyWaitlist'
+import WorkerFinancials from './pages/Dashboard/WorkerFinancials'
+import AuditLogs from './pages/Admin/AuditLogs'
+import PayrollPage from './pages/Admin/PayrollPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   return isAuthenticated() ? <>{children}</> : <Navigate to="/login" />
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user } = useAuthStore()
+  
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" />
+  }
+  
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" />
+  }
+  
+  return <>{children}</>
 }
 
 function App() {
@@ -51,6 +70,32 @@ function App() {
                     <Route path="/materials" element={<Materials />} />
                     <Route path="/analytics" element={<Analytics />} />
                     <Route path="/reviews" element={<Reviews />} />
+                    <Route path="/my-waitlist" element={<MyWaitlist />} />
+                    <Route path="/my-financials" element={<WorkerFinancials />} />
+                    <Route 
+                      path="/admin/emails" 
+                      element={
+                        <AdminRoute>
+                          <EmailSettings />
+                        </AdminRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/admin/audit-logs" 
+                      element={
+                        <AdminRoute>
+                          <AuditLogs />
+                        </AdminRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/admin/payroll" 
+                      element={
+                        <AdminRoute>
+                          <PayrollPage />
+                        </AdminRoute>
+                      } 
+                    />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

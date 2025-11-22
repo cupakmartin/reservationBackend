@@ -1,7 +1,7 @@
 // src/components/Layout.tsx
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { LogOut, Calendar, Users, Package, Clipboard, Home, CalendarCheck, CheckCircle, BarChart3, Upload, Star } from 'lucide-react'
+import { LogOut, Calendar, Users, Package, Clipboard, Home, CalendarCheck, CheckCircle, BarChart3, Upload, Star, Mail, Clock, DollarSign, Shield } from 'lucide-react'
 import Button from './ui/Button'
 import Avatar from './ui/Avatar'
 import UploadModal from './ui/UploadModal'
@@ -46,12 +46,17 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Calendar', href: '/calendar', icon: Calendar, roles: ['client', 'worker', 'admin'] },
     { name: 'Bookings', href: '/bookings', icon: Clipboard, roles: ['client', 'worker', 'admin'] },
     { name: 'My Schedule', href: '/my-schedule', icon: CalendarCheck, roles: ['worker'] },
+    { name: 'My Waitlist', href: '/my-waitlist', icon: Clock, roles: ['client'] },
+    { name: 'My Financials', href: '/my-financials', icon: DollarSign, roles: ['worker'] },
     { name: 'Completed Bookings', href: '/completed-bookings', icon: CheckCircle, roles: ['client', 'worker'] },
     { name: 'Reviews', href: '/reviews', icon: Star, roles: ['worker', 'admin'] },
     { name: 'Procedures', href: '/procedures', icon: Package, roles: ['worker', 'admin'] },
     { name: 'Clients', href: '/clients', icon: Users, roles: ['admin'] },
     { name: 'Materials', href: '/materials', icon: Package, roles: ['worker', 'admin'] },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['admin'] },
+    { name: 'Payroll', href: '/admin/payroll', icon: DollarSign, roles: ['admin'] },
+    { name: 'Audit Logs', href: '/admin/audit-logs', icon: Shield, roles: ['admin'] },
+    { name: 'Email Settings', href: '/admin/emails', icon: Mail, roles: ['admin'] },
   ]
 
   const filteredNavigation = navigation.filter((item) =>

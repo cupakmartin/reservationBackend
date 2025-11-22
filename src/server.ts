@@ -9,6 +9,7 @@ import mongoose from 'mongoose'
 import { createApp } from './app'
 import { createServer } from 'http'
 import { initializeWebSocket } from './websocket'
+import { initializeScheduler } from './services/scheduler.service'
 
 const PORT = Number(process.env.PORT || 4000)
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/salon'
@@ -35,6 +36,9 @@ async function main() {
   
   // Initialize WebSocket server
   initializeWebSocket(httpServer)
+  
+  // Initialize scheduler for automated reminders
+  initializeScheduler()
   
   httpServer.listen(PORT, () => console.log(`[api] listening on :${PORT}`))
 }

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import { Procedure } from '../../../database/models/procedure.model'
 import mongoose from 'mongoose'
+import { logAudit, AuditActions } from '../../../utils/auditLogger'
+import { AuthRequest } from '../../../middleware/auth'
 
 interface QueryFilter {
     name?: { $regex: string; $options: string }
@@ -103,7 +105,7 @@ export const updateProcedure = async (req: Request, res: Response, next: NextFun
     }
 }
 
-export const deleteProcedure = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteProcedure = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
             return res.status(404).json({ error: 'Procedure not found' })
@@ -113,6 +115,16 @@ export const deleteProcedure = async (req: Request, res: Response, next: NextFun
         
         if (!procedure) {
             return res.status(404).json({ error: 'Procedure not found' })
+        }
+        
+        if (req.user?.userId) {
+            logAudit({
+                actorId: req.user.userId,
+                action: AuditActions.PROCEDURE_DELETED,
+                resourceId: req.params.id,
+                details: { name: procedure.name, price: procedure.price },
+                ipAddress: req.ip
+            }).catch(err => console.error('Audit log failed:', err))
         }
         
         res.json({ ok: true, message: 'Procedure deleted' })

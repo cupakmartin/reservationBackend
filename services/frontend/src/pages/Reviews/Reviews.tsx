@@ -339,7 +339,7 @@ export default function Reviews() {
                         <span className="font-medium">Procedure:</span>{' '}
                         {review.bookingId?.procedure?.name || 'N/A'} •{' '}
                         <span className="text-gray-500">
-                          {format(new Date(review.bookingId.startsAt), 'MMM d, yyyy')}
+                          {review.bookingId?.startsAt ? format(new Date(review.bookingId.startsAt), 'MMM d, yyyy') : 'N/A'}
                         </span>
                       </p>
                     </div>
